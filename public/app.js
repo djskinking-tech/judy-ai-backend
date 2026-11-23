@@ -4,7 +4,7 @@ const messageBox = document.getElementById("message");
 const fixturesBox = document.getElementById("fixtures");
 const countBox = document.getElementById("match-count");
 const caption = document.getElementById("results-caption");
-const tomorrowButton = document.getElementById("tomorrow-matches");
+const dateOptionButtons = Array.from(document.querySelectorAll(".date-option"));
 
 const liveScoreList = document.getElementById("live-score-list");
 const liveScoreUpdated = document.getElementById("live-score-updated");
@@ -391,9 +391,29 @@ async function loadFixtures() {
 dateInput.value = nairobiToday();
 document.getElementById("year").textContent = new Date().getFullYear();
 loadButton.addEventListener("click", loadFixtures);
-tomorrowButton.addEventListener("click", function () {
-  dateInput.value = nairobiDateOffset(1);
+function setQuickDate(offset) {
+  dateInput.value = nairobiDateOffset(offset);
+  dateOptionButtons.forEach(function (button) {
+    const selected = Number(button.dataset.dateOffset) === offset;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
   loadFixtures();
+}
+dateOptionButtons.forEach(function (button) {
+  button.addEventListener("click", function () {
+    setQuickDate(Number(button.dataset.dateOffset));
+  });
+});
+dateInput.addEventListener("change", function () {
+  const selectedOffset = [-1, 0, 1].find(function (offset) {
+    return nairobiDateOffset(offset) === dateInput.value;
+  });
+  dateOptionButtons.forEach(function (button) {
+    const selected = Number(button.dataset.dateOffset) === selectedOffset;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
 });
 if (refreshLiveScoresButton) refreshLiveScoresButton.addEventListener("click", loadLiveScores);
 loadLiveScores();
