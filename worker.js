@@ -1344,7 +1344,7 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ success: false, error: "Sportmonks API token is not configured" }, 500);
       const date = url.searchParams.get("date");
-      if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return reply({ success: false, error: "Date must use YYYY-MM-DD format" }, 400);
       }
       async function inspectProvider(path, timezone) {
