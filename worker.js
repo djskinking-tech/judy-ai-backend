@@ -210,58 +210,111 @@ function evaluateTrackedRecord(record, actualFT, actualHT) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    if (!env.SPORTMONKS_API_TOKEN || !env.JUDY_PREDICTIONS) return;
+    const run = {
+      app: "JUDY AI",
+      status: "running",
+      scheduledTime: controller && controller.scheduledTime ? new Date(controller.scheduledTime).toISOString() : null,
+      cron: controller && controller.cron ? controller.cron : null,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      predictionsScanned: 0,
+      dueFixtures: 0,
+      fixturesChecked: 0,
+      fixturesCompleted: 0,
+      fixturesStillPending: 0,
+      errors: [],
+      rateLimited: false,
+      limitReached: false
+    };
     let cursor;
-    let checkedThisRun = 0;
-    do {
-      const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
-      for (const key of page.keys || []) {
-        if (checkedThisRun >= 20) return;
+    let stop = false;
+    try {
+      if (!env.SPORTMONKS_API_TOKEN || !env.JUDY_PREDICTIONS) {
+        run.status = "configuration_missing";
+        run.errors.push("Sportmonks token or JUDY_PREDICTIONS binding is missing.");
+        return;
+      }
+      do {
+        const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
+        for (const key of page.keys || []) {
+          if (run.fixturesChecked >= 20) {
+            run.limitReached = true;
+            stop = true;
+            break;
+          }
+          run.predictionsScanned++;
+          try {
+            const raw = await env.JUDY_PREDICTIONS.get(key.name);
+            if (!raw) continue;
+            const record = JSON.parse(raw);
+            if (record.status === "completed") continue;
+            const kickoffTime = new Date(String(record.fixture && record.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
+            if (!Number.isFinite(kickoffTime) || kickoffTime > Date.now()) continue;
+            run.dueFixtures++;
+            const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
+              include: "participants;scores;state;league"
+            }, { bypassCache: true });
+            run.fixturesChecked++;
+            record.lastCheckedAt = new Date().toISOString();
+            if (!isFixtureFinished(fixture)) {
+              run.fixturesStillPending++;
+              await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+              continue;
+            }
+            const participants = Array.isArray(fixture.participants) ? fixture.participants : [];
+            const home = participants.find(p => p.meta && p.meta.location === "home");
+            const away = participants.find(p => p.meta && p.meta.location === "away");
+            if (!home || !away) {
+              run.fixturesStillPending++;
+              run.errors.push("Fixture " + record.fixtureId + ": home/away participants missing.");
+              await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+              continue;
+            }
+            const homeFT = goalsForAgainst(fixture, home.id, "CURRENT");
+            const awayFT = goalsForAgainst(fixture, away.id, "CURRENT");
+            if (!homeFT || !awayFT) {
+              run.fixturesStillPending++;
+              run.errors.push("Fixture " + record.fixtureId + ": full-time scores unavailable.");
+              await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+              continue;
+            }
+            const homeHT = goalsForAgainst(fixture, home.id, "1ST_HALF");
+            const awayHT = goalsForAgainst(fixture, away.id, "1ST_HALF");
+            const actualFT = homeFT.scored + "-" + awayFT.scored;
+            const actualHT = homeHT && awayHT ? homeHT.scored + "-" + awayHT.scored : null;
+            record.status = "completed";
+            record.completedAt = new Date().toISOString();
+            record.actual = { fullTime: actualFT, halfTime: actualHT };
+            record.evaluation = evaluateTrackedRecord(record, actualFT, actualHT);
+            await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+            run.fixturesCompleted++;
+          } catch (error) {
+            if (error && error.status === 429) {
+              run.rateLimited = true;
+              run.errors.push("Sportmonks rate limit reached; remaining fixtures will retry next run.");
+              stop = true;
+              break;
+            }
+            run.errors.push("Fixture " + key.name + ": " + String(error && error.message || error).slice(0, 240));
+          }
+        }
+        cursor = page.list_complete ? undefined : page.cursor;
+      } while (cursor && !stop);
+      if (run.status === "running") run.status = run.errors.length ? "completed_with_errors" : "success";
+    } catch (error) {
+      run.status = "failed";
+      run.errors.push(String(error && error.message || error).slice(0, 300));
+    } finally {
+      run.finishedAt = new Date().toISOString();
+      if (env.JUDY_PREDICTIONS) {
         try {
-          const raw = await env.JUDY_PREDICTIONS.get(key.name);
-          if (!raw) continue;
-          const record = JSON.parse(raw);
-          if (record.status === "completed") continue;
-          const kickoffTime = new Date(String(record.fixture && record.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
-          if (!Number.isFinite(kickoffTime) || kickoffTime > Date.now()) continue;
-          checkedThisRun++;
-          const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
-            include: "participants;scores;state;league"
-          }, { bypassCache: true });
-        record.lastCheckedAt = new Date().toISOString();
-        if (!isFixtureFinished(fixture)) {
-          await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
-          continue;
-        }
-        const participants = Array.isArray(fixture.participants) ? fixture.participants : [];
-        const home = participants.find(p => p.meta && p.meta.location === "home");
-        const away = participants.find(p => p.meta && p.meta.location === "away");
-        if (!home || !away) {
-          await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
-          continue;
-        }
-        const homeFT = goalsForAgainst(fixture, home.id, "CURRENT");
-        const awayFT = goalsForAgainst(fixture, away.id, "CURRENT");
-        if (!homeFT || !awayFT) {
-          await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
-          continue;
-        }
-        const homeHT = goalsForAgainst(fixture, home.id, "1ST_HALF");
-        const awayHT = goalsForAgainst(fixture, away.id, "1ST_HALF");
-        const actualFT = homeFT.scored + "-" + awayFT.scored;
-        const actualHT = homeHT && awayHT ? homeHT.scored + "-" + awayHT.scored : null;
-        record.status = "completed";
-        record.completedAt = new Date().toISOString();
-        record.actual = { fullTime: actualFT, halfTime: actualHT };
-        record.evaluation = evaluateTrackedRecord(record, actualFT, actualHT);
-        await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+          await env.JUDY_PREDICTIONS.put("cron:latest", JSON.stringify(run));
         } catch (error) {
-          if (error && error.status === 429) return;
-          // Keep this fixture pending; the next hourly run will retry it.
+          console.error("JUDY AI cron diagnostic write failed:", error && error.message || error);
         }
       }
-      cursor = page.list_complete ? undefined : page.cursor;
-    } while (cursor);
+      console.log("JUDY AI cron run:", JSON.stringify(run));
+    }
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -279,6 +332,25 @@ export default {
           "Access-Control-Allow-Headers": "Content-Type"
         }
       });
+    }
+
+    if (url.pathname === "/api/cron-status") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.JUDY_PREDICTIONS) return reply({
+        app: "JUDY AI", success: false, error: "Prediction storage is not configured"
+      }, 503);
+      try {
+        const raw = await env.JUDY_PREDICTIONS.get("cron:latest");
+        return reply({
+          app: "JUDY AI",
+          success: true,
+          mode: "cron_diagnostics",
+          message: raw ? "Latest scheduled-run diagnostic found." : "No scheduled-run diagnostic has been recorded yet. Wait for the next hourly trigger.",
+          latestRun: raw ? JSON.parse(raw) : null
+        });
+      } catch (error) {
+        return reply({ app: "JUDY AI", success: false, error: "Could not read Cron diagnostics", details: error.message }, 500);
+      }
     }
 
     if (url.pathname === "/api/diagnostics") {
