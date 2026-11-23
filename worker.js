@@ -46,6 +46,38 @@ function average(values) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
+function leagueGoalAverage(forms, leagueId, period, kickoff, minimumFixtures = 6) {
+  if (leagueId === null || leagueId === undefined) return { average: null, fixtures: 0, used: false };
+  const unique = new Map();
+  for (const item of forms) {
+    if (Number(item.leagueId) !== Number(leagueId) || !item[period] || !item.fixtureId) continue;
+    if (!unique.has(String(item.fixtureId))) unique.set(String(item.fixtureId), item);
+  }
+  let weightedGoals = 0;
+  let totalWeight = 0;
+  for (const item of unique.values()) {
+    const matchDate = new Date(String(item.date || "").replace(" ", "T") + "Z");
+    const ageDays = Number.isNaN(matchDate.getTime()) ? 0 :
+      Math.max(0, (kickoff.getTime() - matchDate.getTime()) / 86400000);
+    const weight = Math.exp(-Math.LN2 * ageDays / 45);
+    weightedGoals += (item[period].scored + item[period].conceded) * weight;
+    totalWeight += 2 * weight;
+  }
+  const fixtures = unique.size;
+  const avg = totalWeight ? weightedGoals / totalWeight : null;
+  const used = fixtures >= minimumFixtures && Number.isFinite(avg) && avg > 0;
+  return { average: used ? avg : null, fixtures, used };
+}
+
+function leagueAdjustedExpectedGoals(teamAttack, opponentConceded, leagueAverage) {
+  if (!Number.isFinite(teamAttack) || !Number.isFinite(opponentConceded) ||
+      !Number.isFinite(leagueAverage) || leagueAverage <= 0) return null;
+  const attackStrength = teamAttack / leagueAverage;
+  const opponentDefensiveWeakness = opponentConceded / leagueAverage;
+  return Math.max(0.05, Math.min(4.5,
+    leagueAverage * attackStrength * opponentDefensiveWeakness));
+}
+
 function reply(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -238,10 +270,10 @@ export default {
           const startDate = new Date(kickoff.getTime() - 180 * 86400000).toISOString().slice(0, 10);
           const [homeHistory, awayHistory] = await Promise.all([
             sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + homeTeam.id, {
-              include: "scores;participants", per_page: "50", order: "desc"
+              include: "scores;participants;league", per_page: "50", order: "desc"
             }),
             sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + awayTeam.id, {
-              include: "scores;participants", per_page: "50", order: "desc"
+              include: "scores;participants;league", per_page: "50", order: "desc"
             })
           ]);
 
@@ -253,6 +285,8 @@ export default {
                 const participant = Array.isArray(f.participants)
                   ? f.participants.find(p => Number(p.id) === Number(teamId)) : null;
                 return {
+                  fixtureId: f.id,
+                  leagueId: f.league_id || (f.league && f.league.id) || null,
                   ft: goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF"),
                   ht: goalsForAgainst(f, teamId, "1ST_HALF"),
                   date: f.starting_at,
@@ -279,15 +313,23 @@ export default {
           const hht = periodAverages(homeForm, "ht", "home", kickoff);
           const aht = periodAverages(awayForm, "ht", "away", kickoff);
           const expectedGoals = (attack, defence) => Math.max(0.05, Math.min(4.5, (attack + defence) / 2));
-          const ftHome = expectedGoals(hft.scored, aft.conceded);
-          const ftAway = expectedGoals(aft.scored, hft.conceded);
+          const v1FtHome = expectedGoals(hft.scored, aft.conceded);
+          const v1FtAway = expectedGoals(aft.scored, hft.conceded);
           const htReady = hht.scored !== null && aht.scored !== null &&
             hht.conceded !== null && aht.conceded !== null;
-          const ftOptions = topScoreOptions(ftHome, ftAway);
-          const htOptions = htReady ? topScoreOptions(
-            expectedGoals(hht.scored, aht.conceded),
-            expectedGoals(aht.scored, hht.conceded)
-          ) : null;
+          const v1HtHome = htReady ? expectedGoals(hht.scored, aht.conceded) : null;
+          const v1HtAway = htReady ? expectedGoals(aht.scored, hht.conceded) : null;
+          const leagueId = target.league_id || (target.league && target.league.id);
+          const leagueFt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ft", kickoff);
+          const leagueHt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ht", kickoff);
+          const v2FtHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft.scored, aft.conceded, leagueFt.average) : v1FtHome;
+          const v2FtAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average) : v1FtAway;
+          const v2HtHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average) : v1HtHome) : null;
+          const v2HtAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average) : v1HtAway) : null;
+          const ftOptions = topScoreOptions(v1FtHome, v1FtAway);
+          const htOptions = htReady ? topScoreOptions(v1HtHome, v1HtAway) : null;
+          const v2FtOptions = topScoreOptions(v2FtHome, v2FtAway);
+          const v2HtOptions = htReady ? topScoreOptions(v2HtHome, v2HtAway) : null;
 
           const actualHomeFT = goalsForAgainst(target, homeTeam.id, "CURRENT") ||
             goalsForAgainst(target, homeTeam.id, "2ND_HALF");
@@ -316,6 +358,23 @@ export default {
               fullTimeTopTwo: ftOptions.some(option => option.score === actualFT),
               halfTimeExact: actualHT ? Boolean(htOptions && htOptions[0] && htOptions[0].score === actualHT) : null,
               halfTimeTopTwo: actualHT ? Boolean(htOptions && htOptions.some(option => option.score === actualHT)) : null
+            },
+            comparisonV2: {
+              predicted: { fullTime: v2FtOptions, halfTime: v2HtOptions },
+              hits: {
+                fullTimeExact: v2FtOptions[0] && v2FtOptions[0].score === actualFT,
+                fullTimeTopTwo: v2FtOptions.some(option => option.score === actualFT),
+                halfTimeExact: actualHT ? Boolean(v2HtOptions && v2HtOptions[0] && v2HtOptions[0].score === actualHT) : null,
+                halfTimeTopTwo: actualHT ? Boolean(v2HtOptions && v2HtOptions.some(option => option.score === actualHT)) : null
+              },
+              leagueBaseline: {
+                fullTimeAverageGoalsPerTeam: leagueFt.average === null ? null : Number(leagueFt.average.toFixed(3)),
+                fullTimeLeagueFixtures: leagueFt.fixtures,
+                fullTimeAdjustmentUsed: leagueFt.used,
+                halfTimeAverageGoalsPerTeam: leagueHt.average === null ? null : Number(leagueHt.average.toFixed(3)),
+                halfTimeLeagueFixtures: leagueHt.fixtures,
+                halfTimeAdjustmentUsed: leagueHt.used
+              }
             }
           });
         }
@@ -326,16 +385,20 @@ export default {
         const htCompleted = completed.filter(item => item.actual.halfTime);
         const htHits = htCompleted.filter(item => item.hits.halfTimeExact === true).length;
         const htTopTwoHits = htCompleted.filter(item => item.hits.halfTimeTopTwo === true).length;
+        const v2Hits = key => completed.filter(item => item.comparisonV2 && item.comparisonV2.hits[key] === true).length;
+        const v2HtHits = htCompleted.filter(item => item.comparisonV2 && item.comparisonV2.hits.halfTimeExact === true).length;
+        const v2HtTopTwoHits = htCompleted.filter(item => item.comparisonV2 && item.comparisonV2.hits.halfTimeTopTwo === true).length;
         return reply({
           app: "JUDY AI",
           success: true,
-          mode: "historical_backtest",
-          warning: "Small-sample experimental test only. Predictions use only matches strictly before each fixture's kickoff; results are not proof of future accuracy.",
+          mode: "historical_backtest_v1_vs_v2",
+          engineComparison: "V1 baseline versus V2 league-adjusted Poisson",
+          warning: "Experimental paired comparison only. Both models use only matches strictly before each fixture's kickoff. V2 league averages are estimated from recent available fixtures involving the two teams in the same league, not a complete league-wide sample.",
           requestedFixtures: rawIds.length,
           search: searchSummary,
           testedFixtures: completed.length,
           skippedFixtures: tested.filter(item => item.status !== "tested"),
-          metrics: {
+          metricsV1: {
             fullTimeExactScoreHits: countHits("fullTimeExact"),
             fullTimeExactScoreAccuracyPercent: rate(countHits("fullTimeExact")),
             fullTimeTopTwoHits: countHits("fullTimeTopTwo"),
@@ -345,6 +408,17 @@ export default {
             halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((htHits / htCompleted.length * 100).toFixed(2)) : null,
             halfTimeTopTwoHits: htTopTwoHits,
             halfTimeTopTwoAccuracyPercent: htCompleted.length ? Number((htTopTwoHits / htCompleted.length * 100).toFixed(2)) : null
+          },
+          metricsV2: {
+            fullTimeExactScoreHits: v2Hits("fullTimeExact"),
+            fullTimeExactScoreAccuracyPercent: rate(v2Hits("fullTimeExact")),
+            fullTimeTopTwoHits: v2Hits("fullTimeTopTwo"),
+            fullTimeTopTwoAccuracyPercent: rate(v2Hits("fullTimeTopTwo")),
+            halfTimeFixturesWithResults: htCompleted.length,
+            halfTimeExactScoreHits: v2HtHits,
+            halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((v2HtHits / htCompleted.length * 100).toFixed(2)) : null,
+            halfTimeTopTwoHits: v2HtTopTwoHits,
+            halfTimeTopTwoAccuracyPercent: htCompleted.length ? Number((v2HtTopTwoHits / htCompleted.length * 100).toFixed(2)) : null
           },
           results: completed
         });
@@ -366,7 +440,7 @@ export default {
       }
 
       const cache = caches.default;
-      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v2/" + fixtureId);
+      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v3/" + fixtureId);
       const cached = await cache.match(cacheKey);
       if (cached) return new Response(cached.body, {
         status: cached.status,
@@ -406,10 +480,10 @@ export default {
 
         const [homeHistory, awayHistory] = await Promise.all([
           sportmonks("fixtures/between/" + start + "/" + endDate + "/" + homeTeam.id, {
-            include: "scores;participants", per_page: "50", order: "desc"
+            include: "scores;participants;league", per_page: "50", order: "desc"
           }),
           sportmonks("fixtures/between/" + start + "/" + endDate + "/" + awayTeam.id, {
-            include: "scores;participants", per_page: "50", order: "desc"
+            include: "scores;participants;league", per_page: "50", order: "desc"
           })
         ]);
 
@@ -421,6 +495,8 @@ export default {
                 ? f.participants.find(p => Number(p.id) === Number(teamId))
                 : null;
               return {
+                fixtureId: f.id,
+                leagueId: f.league_id || (f.league && f.league.id) || null,
                 ft: goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF"),
                 ht: goalsForAgainst(f, teamId, "1ST_HALF"),
                 date: f.starting_at,
@@ -480,19 +556,26 @@ export default {
         function expectedGoals(teamAttack, opponentDefence) {
           return Math.max(0.05, Math.min(4.5, (teamAttack + opponentDefence) / 2));
         }
-        const ftHome = expectedGoals(hft.scored, aft.conceded);
-        const ftAway = expectedGoals(aft.scored, hft.conceded);
+        const v1FtHome = expectedGoals(hft.scored, aft.conceded);
+        const v1FtAway = expectedGoals(aft.scored, hft.conceded);
         const htReady = hht.scored !== null && aht.scored !== null &&
           hht.conceded !== null && aht.conceded !== null;
-        const htHome = htReady ? expectedGoals(hht.scored, aht.conceded) : null;
-        const htAway = htReady ? expectedGoals(aht.scored, hht.conceded) : null;
+        const v1HtHome = htReady ? expectedGoals(hht.scored, aht.conceded) : null;
+        const v1HtAway = htReady ? expectedGoals(aht.scored, hht.conceded) : null;
+        const leagueId = target.league_id || (target.league && target.league.id);
+        const leagueFt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ft", kickoff);
+        const leagueHt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ht", kickoff);
+        const ftHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft.scored, aft.conceded, leagueFt.average) : v1FtHome;
+        const ftAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average) : v1FtAway;
+        const htHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average) : v1HtHome) : null;
+        const htAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average) : v1HtAway) : null;
         const sampleSize = { home: homeForm.length, away: awayForm.length };
         const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
         const result = {
           app: "JUDY AI",
           success: true,
           experimental: true,
-          validationStatus: "Not yet backtested or calibrated",
+          validationStatus: "V2 not yet validated; paired historical comparison available",
           provider: "Sportmonks",
           fixture: {
             id: target.id,
@@ -513,17 +596,35 @@ export default {
           confidence,
           predictions: {
             fullTime: {
-              method: "Recency-weighted Poisson model using recent goals, with home/away venue splits when at least 3 venue-specific matches are available",
+              method: leagueFt.used
+                ? "V2 league-adjusted Poisson model using recency-weighted attack and defensive-concession strengths plus a recent same-league scoring baseline"
+                : "V2 fallback to V1 recency-weighted Poisson because fewer than 6 recent same-league fixtures were available",
               expectedGoals: { home: Number(ftHome.toFixed(2)), away: Number(ftAway.toFixed(2)) },
               options: topScoreOptions(ftHome, ftAway)
             },
             halfTime: htReady ? {
-              method: "Recency-weighted Poisson model using recent first-half goals, with home/away venue splits when at least 3 venue-specific matches are available",
+              method: leagueHt.used
+                ? "V2 league-adjusted first-half Poisson model using a recent same-league first-half scoring baseline"
+                : "V2 fallback to V1 first-half Poisson because fewer than 6 same-league first-half fixtures were available",
               expectedGoals: { home: Number(htHome.toFixed(2)), away: Number(htAway.toFixed(2)) },
               options: topScoreOptions(htHome, htAway)
             } : null
           },
-          note: "Probabilities are experimental model estimates, not guarantees. This version weights recent matches more heavily and uses venue-specific form when enough data exists. League-wide strength adjustment and historical backtesting are still pending."
+          baselineV1: {
+            fullTime: { expectedGoals: { home: Number(v1FtHome.toFixed(2)), away: Number(v1FtAway.toFixed(2)) }, options: topScoreOptions(v1FtHome, v1FtAway) },
+            halfTime: htReady ? { expectedGoals: { home: Number(v1HtHome.toFixed(2)), away: Number(v1HtAway.toFixed(2)) }, options: topScoreOptions(v1HtHome, v1HtAway) } : null
+          },
+          modelDiagnostics: {
+            engine: "V2",
+            fullTimeLeagueAverageGoalsPerTeam: leagueFt.average === null ? null : Number(leagueFt.average.toFixed(3)),
+            fullTimeLeagueFixturesInSample: leagueFt.fixtures,
+            fullTimeLeagueAdjustmentUsed: leagueFt.used,
+            halfTimeLeagueAverageGoalsPerTeam: leagueHt.average === null ? null : Number(leagueHt.average.toFixed(3)),
+            halfTimeLeagueFixturesInSample: leagueHt.fixtures,
+            halfTimeLeagueAdjustmentUsed: leagueHt.used,
+            leagueBaselineNote: "Recent same-league fixtures found in the two teams' histories; this is a limited proxy, not a complete league-wide average."
+          },
+          note: "V2 is experimental and not yet validated. It adjusts expected goals using a recent same-league scoring baseline when at least 6 unique fixtures are available; otherwise it falls back to V1. Probabilities are estimates, not guarantees."
         };
         ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(result), {
           headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
