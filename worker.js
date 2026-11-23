@@ -1,4 +1,4 @@
-const WEBSITE_ORIGIN = "https://dry-shape-6789.djskinking.workers.dev";
+const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
 const CACHE_TTL = 900;
 
 function reply(data, status = 200) {
