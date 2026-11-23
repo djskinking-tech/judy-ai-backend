@@ -198,7 +198,7 @@ function oddsOutcome(rows, wanted) {
 }
 function renderOddsMarkup(payload) {
   const rows = Array.isArray(payload.odds) ? payload.odds : [];
-  if (!rows.length) return '<p class="odds-empty">No bookmaker odds are currently available for this match.</p>';
+  if (!rows.length) return '<p class="odds-empty">' + escapeHtml(payload.message || "No bookmaker odds are currently available for this match.") + '</p>';
   const byBookmaker = new Map();
   rows.forEach(function (row) {
     const name = row.bookmaker || "Bookmaker";
