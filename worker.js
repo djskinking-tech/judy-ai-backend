@@ -175,11 +175,18 @@ async function storePrediction(env, result) {
     // that were saved before Match Intelligence was introduced.
     try {
       const record = JSON.parse(existing);
+      let changed = false;
       if (record && !record.teamIntelligence && result.teamIntelligence) {
         record.teamIntelligence = result.teamIntelligence;
         record.teamIntelligenceAddedAt = new Date().toISOString();
-        await env.JUDY_PREDICTIONS.put(key, JSON.stringify(record));
+        changed = true;
       }
+      if (record && !record.playerWatch && result.playerWatch) {
+        record.playerWatch = result.playerWatch;
+        record.playerWatchAddedAt = new Date().toISOString();
+        changed = true;
+      }
+      if (changed) await env.JUDY_PREDICTIONS.put(key, JSON.stringify(record));
     } catch {}
     return "already_saved";
   }
