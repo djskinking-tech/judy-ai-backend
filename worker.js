@@ -17,6 +17,12 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // Serve the website (HTML, CSS, and JavaScript) from the configured
+    // Workers Static Assets directory. Keep /api/* handled by this Worker.
+    if (!url.pathname.startsWith("/api/")) {
+      return env.ASSETS.fetch(request);
+    }
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -25,15 +31,6 @@ export default {
           "Access-Control-Allow-Methods": "GET, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type"
         }
-      });
-    }
-
-    if (url.pathname === "/") {
-      return reply({
-        app: "JUDY AI",
-        backend: "online",
-        provider: "Highlightly",
-        version: "2.0"
       });
     }
 
@@ -50,7 +47,7 @@ export default {
     }
 
     const date = url.searchParams.get("date");
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
       return reply({ error: "Date must use YYYY-MM-DD format" }, 400);
     }
 
