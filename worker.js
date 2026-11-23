@@ -1279,6 +1279,32 @@ export default {
             awayTeam: awayTeam.name
           },
           sampleSize,
+          dataQuality: {
+            historyWindowDays: 180,
+            recentMatchesUsed: { home: homeForm.length, away: awayForm.length },
+            firstHalfMatchesAvailable: {
+              home: homeForm.filter(item => item.ht).length,
+              away: awayForm.filter(item => item.ht).length
+            },
+            venueSpecificMatches: {
+              homeTeamAtHome: hft.venueMatches,
+              awayTeamAway: aft.venueMatches
+            },
+            confidenceLevel: confidence,
+            warnings: [
+              ...(Math.min(homeForm.length, awayForm.length) < 6
+                ? ["Small recent-form sample; confidence is low."] : []),
+              ...(!hft.venueSplitUsed || !aft.venueSplitUsed
+                ? ["At least one venue split uses all-venue results because the venue sample is small."] : []),
+              ...(!htReady
+                ? ["Half-time prediction is unavailable because first-half score history is incomplete."] : []),
+              ...(playerWatch.status !== "available"
+                ? ["Player availability and lineup information was not supplied by the provider for this fixture."] : []),
+              ...(!leagueFt.used
+                ? ["The recent same-league scoring baseline was unavailable; full-time model uses its fallback."] : [])
+            ],
+            interpretation: "Data-quality indicators describe the available historical sample; they are not a guarantee of prediction accuracy."
+          },
           teamIntelligence,
           playerWatch,
           venueAnalysis: {
