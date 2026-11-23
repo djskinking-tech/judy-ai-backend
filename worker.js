@@ -89,9 +89,14 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
 
-      const rawIds = (url.searchParams.get("fixtureIds") || "").split(",").map(v => v.trim()).filter(Boolean);
-      if (!rawIds.length || rawIds.length > 5 || rawIds.some(id => !/^\\d+$/.test(id))) {
-        return reply({ error: "Provide 1 to 5 comma-separated completed Sportmonks fixture IDs in fixtureIds." }, 400);
+      let rawIds = (url.searchParams.get("fixtureIds") || "").split(",").map(v => v.trim()).filter(Boolean);
+      const dateParam = url.searchParams.get("date");
+      const limit = Math.max(1, Math.min(2, Number(url.searchParams.get("limit") || 2)));
+      if (rawIds.length && (dateParam || rawIds.length > 5 || rawIds.some(id => !/^\\d+$/.test(id)))) {
+        return reply({ error: "Use either fixtureIds (1 to 5 IDs) or date (YYYY-MM-DD), not both." }, 400);
+      }
+      if (!rawIds.length && (!dateParam || !/^\\d{4}-\\d{2}-\\d{2}$/.test(dateParam))) {
+        return reply({ error: "Provide fixtureIds or a past date in YYYY-MM-DD format." }, 400);
       }
 
       async function sportmonks(path, params = {}) {
@@ -141,6 +146,32 @@ export default {
 
       const tested = [];
       try {
+        if (!rawIds.length) {
+          const dayFixtures = await sportmonks("fixtures/date/" + dateParam, {
+            include: "participants;league;scores;state", per_page: "50"
+          });
+          const finished = (Array.isArray(dayFixtures) ? dayFixtures : []).filter(f => {
+            const stateName = f.state && String(f.state.name || "").toLowerCase();
+            const ft = Array.isArray(f.scores) && f.scores.some(s =>
+              (s.description === "CURRENT" || s.description === "2ND_HALF") &&
+              Number.isFinite(Number(s.score && s.score.goals))
+            );
+            return ft && stateName !== "not started" && stateName !== "ns";
+          });
+          rawIds = finished.slice(0, limit).map(f => String(f.id));
+        }
+        if (!rawIds.length) {
+          return reply({
+            app: "JUDY AI", success: true, mode: "historical_backtest",
+            warning: "No completed fixtures with full-time score data were found for this date.",
+            requestedFixtures: 0, testedFixtures: 0, skippedFixtures: [],
+            metrics: { fullTimeExactScoreHits: 0, fullTimeExactScoreAccuracyPercent: null,
+              fullTimeTopTwoHits: 0, fullTimeTopTwoAccuracyPercent: null,
+              halfTimeFixturesWithResults: 0, halfTimeExactScoreHits: 0,
+              halfTimeExactScoreAccuracyPercent: null, halfTimeTopTwoHits: 0,
+              halfTimeTopTwoAccuracyPercent: null }, results: []
+          });
+        }
         for (const fixtureId of rawIds) {
           const target = await sportmonks("fixtures/" + fixtureId, {
             include: "participants;league;scores;state"
