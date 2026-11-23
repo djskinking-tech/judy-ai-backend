@@ -66,3 +66,11 @@ footer{display:flex;justify-content:space-between;border-top:1px solid #1d2e41;p
 /* Quick access to tomorrow\u2019s fixtures */
 .secondary-button{border:1px solid #66804c;border-radius:10px;padding:11px 14px;background:#14271f;color:var(--green);font:inherit;font-size:11px;font-weight:850;cursor:pointer;white-space:nowrap}.secondary-button:active{transform:translateY(1px)}
 @media(max-width:680px){.control-panel .secondary-button{width:100%}.control-panel .primary-button{grid-column:1/-1;width:100%}}
+
+/* Match Intelligence: recent form */
+.team-intelligence{margin-top:12px;padding:12px;border:1px solid #29445b;border-radius:10px;background:#0b1724}
+.team-intelligence h4{margin:0 0 10px;color:#b9f36a;font-size:9px;letter-spacing:.8px}
+.intelligence-team{display:grid;gap:4px;padding:8px 0;border-top:1px solid #1d3044}
+.intelligence-team strong{font-size:10px;color:#e7f2ff}
+.intelligence-team span{font-size:9px;color:#9fb2c7;line-height:1.45}
+.team-intelligence small{display:block;margin-top:8px;color:#8295a9;font-size:8px;line-height:1.5}
