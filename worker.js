@@ -978,6 +978,18 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/predictions/saved") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.JUDY_PREDICTIONS) return reply({ app: "JUDY AI", success: true, predictions: {}, message: "Prediction storage is not configured." });
+      const rawIds = (url.searchParams.get("fixtureIds") || "").split(",").filter(Boolean);
+      const fixtureIds = [...new Set(rawIds)].filter(id => /^\\d+$/.test(id)).slice(0, 80);
+      if (!fixtureIds.length) return reply({ error: "Provide one or more valid fixtureIds." }, 400);
+      const entries = await Promise.all(fixtureIds.map(async id => [id, await savedPredictionPayload(env, id)]));
+      const predictions = {};
+      for (const [id, saved] of entries) if (saved) predictions[id] = saved;
+      return reply({ app: "JUDY AI", success: true, mode: "saved_predictions", predictions, requested: fixtureIds.length, found: Object.keys(predictions).length });
+    }
+
     if (url.pathname === "/api/predictions") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
