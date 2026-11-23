@@ -1358,49 +1358,56 @@ export default {
     }
 
     const cache = caches.default;
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v2/" + date);
+    // v3 invalidates the old first-page-only fixture cache.
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v3/" + date);
     const cached = await cache.match(cacheKey);
-
     if (cached) {
       return new Response(cached.body, {
         status: cached.status,
-        headers: {
-          ...Object.fromEntries(cached.headers),
-          "Access-Control-Allow-Origin": WEBSITE_ORIGIN
-        }
+        headers: { ...Object.fromEntries(cached.headers), "Access-Control-Allow-Origin": WEBSITE_ORIGIN }
       });
     }
 
-    const apiUrl = new URL("https://api.sportmonks.com/v3/football/fixtures/date/" + date);
-    apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
-    apiUrl.searchParams.set("include", "participants;league;scores;state;venue");
-    apiUrl.searchParams.set("per_page", "50");
-
     try {
-      const upstream = await fetch(apiUrl.toString(), {
-        headers: { "Accept": "application/json" }
-      });
+      const matches = [];
+      const maxPages = 20;
+      let pageNumber = 1;
+      let providerPagination = null;
+      let pageLimitReached = false;
 
-      const raw = await upstream.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        return reply({
-          error: "Sportmonks returned an unreadable response",
-          providerStatus: upstream.status
-        }, 502);
+      while (pageNumber <= maxPages) {
+        const apiUrl = new URL("https://api.sportmonks.com/v3/football/fixtures/date/" + date);
+        apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
+        apiUrl.searchParams.set("include", "participants;league;scores;state;venue");
+        apiUrl.searchParams.set("per_page", "50");
+        apiUrl.searchParams.set("page", String(pageNumber));
+        apiUrl.searchParams.set("timezone", "Africa/Nairobi");
+
+        const upstream = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
+        const raw = await upstream.text();
+        let data;
+        try { data = JSON.parse(raw); }
+        catch {
+          return reply({ error: "Sportmonks returned an unreadable response", providerStatus: upstream.status, page: pageNumber }, 502);
+        }
+        if (!upstream.ok) {
+          return reply({ error: "Sportmonks request failed", providerStatus: upstream.status, details: data, page: pageNumber }, upstream.status);
+        }
+
+        const pageMatches = Array.isArray(data.data) ? data.data : [];
+        matches.push(...pageMatches);
+        providerPagination = data.pagination || providerPagination;
+        const hasMore = Boolean(data.pagination && (
+          data.pagination.has_more === true ||
+          (data.pagination.next_page !== null && data.pagination.next_page !== undefined)
+        ));
+        if (!hasMore || pageMatches.length === 0) break;
+        pageNumber++;
       }
 
-      if (!upstream.ok) {
-        return reply({
-          error: "Sportmonks request failed",
-          providerStatus: upstream.status,
-          details: data
-        }, upstream.status);
+      if (pageNumber > maxPages && providerPagination && providerPagination.has_more === true) {
+        pageLimitReached = true;
       }
-
-      const matches = Array.isArray(data.data) ? data.data : [];
       const result = {
         app: "JUDY AI",
         success: true,
@@ -1408,24 +1415,25 @@ export default {
         date,
         timezone: "Africa/Nairobi",
         total: matches.length,
-        pagination: data.pagination || null,
+        pagination: {
+          count: matches.length,
+          per_page: 50,
+          current_page: Math.min(pageNumber, maxPages),
+          next_page: null,
+          has_more: pageLimitReached,
+          pages_fetched: Math.min(pageNumber, maxPages),
+          page_limit_reached: pageLimitReached,
+          provider: providerPagination
+        },
         fixtures: matches,
         matches
       };
-
       ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(result), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=" + CACHE_TTL
-        }
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + CACHE_TTL }
       })));
-
       return reply(result);
     } catch (error) {
-      return reply({
-        error: "Could not connect to Sportmonks",
-        details: error.message
-      }, 502);
+      return reply({ error: "Could not connect to Sportmonks", details: error.message }, 502);
     }
   }
 };
