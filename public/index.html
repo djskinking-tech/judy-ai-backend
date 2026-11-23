@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08111f">
+  <meta name="description" content="JUDY AI football intelligence — worldwide fixtures and upcoming match insights.">
+  <title>JUDY AI — Football Intelligence</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="JUDY AI home">
+        <span class="brand-mark">J</span>
+        <span><strong>JUDY <em>AI</em></strong><small>FOOTBALL INTELLIGENCE</small></span>
+      </a>
+      <div class="live-indicator"><span></span> DATA CENTER</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">SEE THE GAME BEFORE KICK-OFF</p>
+          <h1>Football intelligence.<br><span>One step ahead.</span></h1>
+          <p class="hero-text">Explore fixtures from around the world and follow the development of JUDY AI match predictions.</p>
+          <div class="hero-tags"><span>WORLDWIDE FIXTURES</span><span>KENYA TIME · EAT</span></div>
+        </div>
+        <div class="hero-orb" aria-hidden="true"><div class="orb-ball">⚽</div><div class="orb-ring"></div></div>
+      </section>
+
+      <section class="section-heading">
+        <div><p class="eyebrow">MATCH CENTER</p><h2>Fixtures</h2></div>
+        <div class="provider-badge"><span class="provider-dot"></span> POWERED BY HIGHLIGHTLY</div>
+      </section>
+
+      <section class="control-panel">
+        <label for="match-date">MATCH DATE</label>
+        <input id="match-date" type="date">
+        <button id="load-matches" class="primary-button" type="button">Load fixtures <span>→</span></button>
+      </section>
+
+      <div id="message" class="message" role="status" aria-live="polite">
+        <span class="message-icon">✦</span>
+        <div><strong>Ready when you are</strong><p>Choose a date and tap “Load fixtures”.</p></div>
+      </div>
+
+      <section class="results-head">
+        <div><h3>Worldwide matches</h3><p id="results-caption">Select a date to view scheduled matches.</p></div>
+        <div id="match-count" class="match-count">— MATCHES</div>
+      </section>
+      <section id="fixtures" class="fixtures-grid" aria-live="polite"></section>
+
+      <section class="prediction-panel">
+        <div class="prediction-symbol">✧</div>
+        <div class="prediction-copy">
+          <p class="eyebrow">COMING NEXT</p>
+          <h2>JUDY prediction engine</h2>
+          <p>Ranked half-time and full-time correct-score predictions, confidence estimates and an accuracy tracker are in development. JUDY will not display invented predictions.</p>
+        </div>
+        <span class="development-pill">IN DEVELOPMENT</span>
+      </section>
+    </main>
+
+    <footer><span>© <span id="year"></span> JUDY AI</span><span>Built for the love of football.</span></footer>
+  </div>
+</body>
+</html>

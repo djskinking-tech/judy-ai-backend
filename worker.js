@@ -46,24 +46,16 @@ export default {
     }
 
     if (!env.HIGHLIGHTLY_API_KEY) {
-      return reply({
-        error: "Highlightly API key is not configured"
-      }, 500);
+      return reply({ error: "Highlightly API key is not configured" }, 500);
     }
 
     const date = url.searchParams.get("date");
-
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return reply({
-        error: "Date must use YYYY-MM-DD format"
-      }, 400);
+    if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      return reply({ error: "Date must use YYYY-MM-DD format" }, 400);
     }
 
     const cache = caches.default;
-    const cacheKey = new Request(
-      `https://judy-ai-cache.example/matches/${date}`
-    );
-
+    const cacheKey = new Request("https://judy-ai-cache.example/matches/" + date);
     const cached = await cache.match(cacheKey);
 
     if (cached) {
@@ -76,10 +68,7 @@ export default {
       });
     }
 
-    const apiUrl = new URL(
-      "https://soccer.highlightly.net/matches"
-    );
-
+    const apiUrl = new URL("https://soccer.highlightly.net/matches");
     apiUrl.searchParams.set("date", date);
     apiUrl.searchParams.set("timezone", "Africa/Nairobi");
     apiUrl.searchParams.set("limit", "100");
@@ -87,14 +76,13 @@ export default {
     try {
       const upstream = await fetch(apiUrl.toString(), {
         headers: {
-          "x-rapidapi-key": env.HIGHLIGHTLY_API_KEY
+          "x-rapidapi-key": env.HIGHLIGHTLY_API_KEY,
+          "Accept": "application/json"
         }
       });
 
       const raw = await upstream.text();
-
       let data;
-
       try {
         data = JSON.parse(raw);
       } catch {
@@ -113,16 +101,10 @@ export default {
       }
 
       let matches = [];
-
-      if (Array.isArray(data)) {
-        matches = data;
-      } else if (Array.isArray(data.data)) {
-        matches = data.data;
-      } else if (Array.isArray(data.matches)) {
-        matches = data.matches;
-      } else if (Array.isArray(data.response)) {
-        matches = data.response;
-      }
+      if (Array.isArray(data)) matches = data;
+      else if (Array.isArray(data.data)) matches = data.data;
+      else if (Array.isArray(data.matches)) matches = data.matches;
+      else if (Array.isArray(data.response)) matches = data.response;
 
       const result = {
         app: "JUDY AI",
@@ -135,20 +117,14 @@ export default {
         matches
       };
 
-      ctx.waitUntil(
-        cache.put(
-          cacheKey,
-          new Response(JSON.stringify(result), {
-            headers: {
-              "Content-Type": "application/json",
-              "Cache-Control": `public, max-age=${CACHE_TTL}`
-            }
-          })
-        )
-      );
+      ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(result), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=" + CACHE_TTL
+        }
+      })));
 
       return reply(result);
-
     } catch (error) {
       return reply({
         error: "Could not connect to Highlightly",
