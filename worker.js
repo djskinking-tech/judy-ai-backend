@@ -255,6 +255,21 @@ function isFixtureFinished(fixture) {
   );
 }
 
+function isHalfTimeReached(fixture) {
+  const state = fixture && fixture.state ? fixture.state : {};
+  const values = [state.state, state.name, state.short_name, state.developer_name]
+    .filter(Boolean).map(value => String(value).toLowerCase().replace(/[\\s-]+/g, "_"));
+  return values.some(value =>
+    value === "ht" || value === "half_time" || value === "halftime" ||
+    value === "2h" || value === "2nd_half" || value === "second_half" ||
+    value === "ft" || value === "aet" || value === "ft_pen" ||
+    value.includes("half_time") || value.includes("second_half") ||
+    value.includes("2nd_half") || value.includes("full_time") ||
+    value.includes("finished") || value.includes("after_extra_time") ||
+    value.includes("after_penalties")
+  );
+}
+
 function scoreHits(options, actual) {
   if (!Array.isArray(options) || !actual) return { exact: null, topTwo: null };
   return {
@@ -467,7 +482,15 @@ export default {
                 goals: row.score && row.score.goals !== undefined ? row.score.goals : null
               }))
             };
-            if (actualHT) {
+            const halfTimeReached = isHalfTimeReached(fixture);
+            if (!halfTimeReached && record.actual.halfTime) {
+              // Sportmonks can expose a live first-half score under 1ST_HALF.
+              // Do not treat it as the official half-time result before the break.
+              record.actual.halfTime = null;
+              record.halfTimeCheckedAt = null;
+              record.evaluation = evaluateTrackedRecord(record, record.actual.fullTime || null, null);
+            }
+            if (actualHT && halfTimeReached) {
               const isNewHT = record.actual.halfTime !== actualHT;
               record.actual.halfTime = actualHT;
               record.halfTimeCheckedAt = record.halfTimeCheckedAt || new Date().toISOString();
