@@ -91,7 +91,7 @@ export default {
 
       let rawIds = (url.searchParams.get("fixtureIds") || "").split(",").map(v => v.trim()).filter(Boolean);
       const dateParam = url.searchParams.get("date");
-      const limit = Math.max(1, Math.min(2, Number(url.searchParams.get("limit") || 2)));
+      const limit = Math.max(1, Math.min(5, Number(url.searchParams.get("limit") || 5)));
       if (rawIds.length && (dateParam || rawIds.length > 5 || rawIds.some(id => !/^[0-9]+$/.test(id)))) {
         return reply({ error: "Use either fixtureIds (1 to 5 IDs) or date (YYYY-MM-DD), not both." }, 400);
       }
