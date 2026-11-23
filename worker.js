@@ -234,7 +234,7 @@ async function savedPredictionPayload(env, fixtureId) {
     experimental: record.experimental === true,
     validationStatus: record.validationStatus || null,
     note: record.note || "This is the original prediction saved before kick-off.",
-    tracking: { saveStatus: "already_saved", recordStatus: record.status || "pending" }
+    tracking: { saveStatus: "already_saved", recordStatus: record.status || "pending", actual: record.actual || null, evaluation: record.evaluation || null, completedAt: record.completedAt || null }
   };
 }
 
