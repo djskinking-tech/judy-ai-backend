@@ -110,6 +110,21 @@ function predictionOptionsMarkup(period, data) {
       return escapeHtml(option.score) + ' · ' + escapeHtml(option.probability) + '%';
     }).join('  |  ') + '</b></div>';
 }
+function playerWatchMarkup(data) {
+  if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
+  const absences = Array.isArray(data.absences) ? data.absences : [];
+  function list(rows) {
+    return rows.length ? rows.map(row => '<li>' + escapeHtml(row.name) + ' — ' + escapeHtml(row.position) + '</li>').join('') : '<li>Not available yet</li>';
+  }
+  const absenceHtml = absences.length
+    ? absences.map(row => '<li><strong>Listed unavailable:</strong> ' + escapeHtml(row.player) + ' — ' + escapeHtml(row.reason) + '</li>').join('')
+    : '<li>No active absences listed by Sportmonks, or data unavailable.</li>';
+  return '<section class="player-watch"><h4>PLAYER WATCH</h4><strong>Injuries / suspensions</strong><ul>' + absenceHtml +
+    '</ul><strong>' + escapeHtml(data.lineups && data.lineups.label || "Expected XI") +
+    '</strong><div class="player-watch-teams"><div><b>Home team</b><ul>' + list(data.lineups && data.lineups.home || []) +
+    '</ul></div><div><b>Away team</b><ul>' + list(data.lineups && data.lineups.away || []) +
+    '</ul></div></div><small>Source: Sportmonks. Absence data is provider-listed; lineups may be unconfirmed. Missing data is shown as unavailable, not guessed.</small></section>';
+}
 function teamIntelligenceMarkup(data) {
   if (!data || !data.home || !data.away) return "";
   function teamBlock(label, team) {
@@ -182,6 +197,7 @@ async function generatePrediction(button) {
       ' home / ' + escapeHtml(payload.sampleSize && payload.sampleSize.away != null ? payload.sampleSize.away : "—") +
       ' away matches analysed. Not guaranteed.</p>' +
       teamIntelligenceMarkup(payload.teamIntelligence) +
+      playerWatchMarkup(payload.playerWatch) +
       '<p class="prediction-tracking ' + trackingClass + '">' + escapeHtml(trackingMessage) + '</p>';
     button.textContent = payload.historical ? "View saved prediction" : "Refresh predictions";
   } catch (error) {
