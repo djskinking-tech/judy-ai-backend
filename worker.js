@@ -239,9 +239,9 @@ export default {
             actual: { fullTime: actualFT, halfTime: actualHT },
             predicted: { fullTime: ftOptions, halfTime: htOptions },
             hits: {
-              fullTimeExact: ftOptions.some(option => option.score === actualFT),
+              fullTimeExact: ftOptions[0] && ftOptions[0].score === actualFT,
               fullTimeTopTwo: ftOptions.some(option => option.score === actualFT),
-              halfTimeExact: actualHT ? Boolean(htOptions && htOptions.some(option => option.score === actualHT)) : null,
+              halfTimeExact: actualHT ? Boolean(htOptions && htOptions[0] && htOptions[0].score === actualHT) : null,
               halfTimeTopTwo: actualHT ? Boolean(htOptions && htOptions.some(option => option.score === actualHT)) : null
             }
           });
