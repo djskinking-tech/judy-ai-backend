@@ -91,12 +91,18 @@ export default {
 
       let rawIds = (url.searchParams.get("fixtureIds") || "").split(",").map(v => v.trim()).filter(Boolean);
       const dateParam = url.searchParams.get("date");
+      const autoMode = url.searchParams.get("auto") === "1";
+      const beforeParam = url.searchParams.get("before") || dateParam;
+      const lookbackDays = Math.max(1, Math.min(100, Number(url.searchParams.get("lookbackDays") || 30)));
       const limit = Math.max(1, Math.min(5, Number(url.searchParams.get("limit") || 5)));
-      if (rawIds.length && (dateParam || rawIds.length > 5 || rawIds.some(id => !/^[0-9]+$/.test(id)))) {
-        return reply({ error: "Use either fixtureIds (1 to 5 IDs) or date (YYYY-MM-DD), not both." }, 400);
+      if (rawIds.length && (dateParam || autoMode || url.searchParams.has("before") || rawIds.length > 5 || rawIds.some(id => !/^[0-9]+$/.test(id)))) {
+        return reply({ error: "Use either fixtureIds, date, or auto historical search—not more than one mode." }, 400);
       }
-      if (!rawIds.length && (!dateParam || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateParam))) {
-        return reply({ error: "Provide fixtureIds or a past date in YYYY-MM-DD format." }, 400);
+      if (autoMode && (!beforeParam || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(beforeParam))) {
+        return reply({ error: "Automatic search requires before=YYYY-MM-DD." }, 400);
+      }
+      if (!rawIds.length && !autoMode && (!dateParam || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateParam))) {
+        return reply({ error: "Provide fixtureIds, a past date, or auto=1 with before=YYYY-MM-DD." }, 400);
       }
 
       async function sportmonks(path, params = {}) {
@@ -145,25 +151,58 @@ export default {
       }
 
       const tested = [];
+      let searchSummary = null;
       try {
-        if (!rawIds.length) {
+        if (!rawIds.length && autoMode) {
+          const end = new Date(beforeParam + "T23:59:59Z");
+          const start = new Date(end.getTime() - (lookbackDays - 1) * 86400000).toISOString().slice(0, 10);
+          const rangeFixtures = await sportmonks("fixtures/between/" + start + "/" + beforeParam, {
+            include: "participants;league;scores;state", per_page: "50", order: "desc"
+          });
+          const finished = (Array.isArray(rangeFixtures) ? rangeFixtures : []).filter(f => {
+            const stateName = f.state && String(f.state.name || "").toLowerCase();
+            const kickoffTime = new Date(String(f.starting_at || "").replace(" ", "T") + "Z").getTime();
+            const hasFullTimeScore = Array.isArray(f.scores) && f.scores.some(score =>
+              (score.description === "CURRENT" || score.description === "2ND_HALF") &&
+              score.score && score.score.goals !== null && score.score.goals !== undefined &&
+              Number.isFinite(Number(score.score.goals))
+            );
+            return hasFullTimeScore && Number.isFinite(kickoffTime) &&
+              kickoffTime <= end.getTime() &&
+              !["not started", "ns", "live", "in play", "1st half", "2nd half", "half-time"].includes(stateName);
+          });
+          rawIds = finished.slice(0, limit).map(f => String(f.id));
+          searchSummary = {
+            mode: "automatic_date_range",
+            from: start,
+            through: beforeParam,
+            lookbackDays,
+            eligibleFixturesFoundInReturnedPage: finished.length,
+            selectedFixtures: rawIds.length,
+            note: "Searches one Sportmonks date-range page (up to 50 fixtures), then backtests the most recent eligible completed fixtures."
+          };
+        } else if (!rawIds.length) {
           const dayFixtures = await sportmonks("fixtures/date/" + dateParam, {
             include: "participants;league;scores;state", per_page: "50"
           });
           const finished = (Array.isArray(dayFixtures) ? dayFixtures : []).filter(f => {
             const stateName = f.state && String(f.state.name || "").toLowerCase();
-            const ft = Array.isArray(f.scores) && f.scores.some(s =>
-              (s.description === "CURRENT" || s.description === "2ND_HALF") &&
-              Number.isFinite(Number(s.score && s.score.goals))
+            const ft = Array.isArray(f.scores) && f.scores.some(score =>
+              (score.description === "CURRENT" || score.description === "2ND_HALF") &&
+              score.score && score.score.goals !== null && score.score.goals !== undefined &&
+              Number.isFinite(Number(score.score.goals))
             );
-            return ft && stateName !== "not started" && stateName !== "ns";
+            return ft && !["not started", "ns", "live", "in play", "1st half", "2nd half", "half-time"].includes(stateName);
           });
           rawIds = finished.slice(0, limit).map(f => String(f.id));
         }
         if (!rawIds.length) {
           return reply({
             app: "JUDY AI", success: true, mode: "historical_backtest",
-            warning: "No completed fixtures with full-time score data were found for this date.",
+            warning: autoMode
+              ? "No completed fixtures with full-time score data were found in the requested historical date range."
+              : "No completed fixtures with full-time score data were found for this date.",
+            search: searchSummary,
             requestedFixtures: 0, testedFixtures: 0, skippedFixtures: [],
             metrics: { fullTimeExactScoreHits: 0, fullTimeExactScoreAccuracyPercent: null,
               fullTimeTopTwoHits: 0, fullTimeTopTwoAccuracyPercent: null,
@@ -290,6 +329,7 @@ export default {
           mode: "historical_backtest",
           warning: "Small-sample experimental test only. Predictions use only matches strictly before each fixture's kickoff; results are not proof of future accuracy.",
           requestedFixtures: rawIds.length,
+          search: searchSummary,
           testedFixtures: completed.length,
           skippedFixtures: tested.filter(item => item.status !== "tested"),
           metrics: {
