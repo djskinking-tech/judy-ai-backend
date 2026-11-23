@@ -32,6 +32,14 @@ export default {
       });
     }
 
+    if (url.pathname === "/api/diagnostics") {
+      return reply({
+        app: "JUDY AI",
+        sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
+        availableBindingNames: Object.keys(env)
+      });
+    }
+
     if (url.pathname !== "/api/matches") {
       return reply({ error: "Route not found" }, 404);
     }
