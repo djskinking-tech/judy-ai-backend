@@ -3,7 +3,7 @@
   "name": "judy-ai-backend-live",
   "main": "worker.js",
   "compatibility_date": "2026-11-23",
-  "triggers": { "crons": ["0 * * * *"] },
+  "triggers": { "crons": ["*/30 * * * *"] },
   "kv_namespaces": [
     {
       "binding": "JUDY_PREDICTIONS",
