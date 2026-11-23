@@ -179,12 +179,40 @@ async function storePrediction(env, result) {
     predictions: result.predictions,
     baselineV1: result.baselineV1,
     modelDiagnostics: result.modelDiagnostics,
+    sampleSize: result.sampleSize || null,
+    confidence: result.confidence || null,
+    experimental: result.experimental === true,
+    validationStatus: result.validationStatus || null,
+    note: result.note || null,
     actual: null,
     evaluation: null,
     lastCheckedAt: null
   };
   await env.JUDY_PREDICTIONS.put(key, JSON.stringify(record));
   return "saved";
+}
+
+async function savedPredictionPayload(env, fixtureId) {
+  if (!env.JUDY_PREDICTIONS) return null;
+  const raw = await env.JUDY_PREDICTIONS.get(trackingKey(fixtureId));
+  if (!raw) return null;
+  const record = JSON.parse(raw);
+  if (!record || !record.predictions || !record.fixture) return null;
+  return {
+    app: "JUDY AI",
+    success: true,
+    historical: true,
+    fixture: record.fixture,
+    predictions: record.predictions,
+    baselineV1: record.baselineV1 || null,
+    modelDiagnostics: record.modelDiagnostics || null,
+    sampleSize: record.sampleSize || { home: "—", away: "—" },
+    confidence: record.confidence || "Recorded pre-kickoff",
+    experimental: record.experimental === true,
+    validationStatus: record.validationStatus || null,
+    note: record.note || "This is the original prediction saved before kick-off.",
+    tracking: { saveStatus: "already_saved", recordStatus: record.status || "pending" }
+  };
 }
 
 function isFixtureFinished(fixture) {
@@ -851,10 +879,14 @@ export default {
       if (cached) {
         const cachedResult = await cached.clone().json();
         const cachedKickoff = new Date(String(cachedResult.fixture && cachedResult.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
-        if (Number.isFinite(cachedKickoff) && cachedKickoff <= Date.now()) return reply({
-          app: "JUDY AI", success: false, error: "Predictions are only available before kick-off.",
-          fixtureId, startingAt: cachedResult.fixture.startingAt
-        }, 409);
+        if (Number.isFinite(cachedKickoff) && cachedKickoff <= Date.now()) {
+          const saved = await savedPredictionPayload(env, fixtureId);
+          if (saved) return reply(saved);
+          return reply({
+            app: "JUDY AI", success: false, error: "No pre-kickoff prediction was saved for this match.",
+            fixtureId, startingAt: cachedResult.fixture.startingAt
+          }, 409);
+        }
         let trackingSaveStatus = "storage_not_configured";
         if (env.JUDY_PREDICTIONS && cachedResult && cachedResult.fixture &&
             new Date(String(cachedResult.fixture.startingAt).replace(" ", "T") + "Z").getTime() > Date.now()) {
@@ -880,10 +912,14 @@ export default {
 
         const kickoff = new Date(String(target.starting_at).replace(" ", "T") + "Z");
         if (Number.isNaN(kickoff.getTime())) return reply({ error: "Fixture kick-off date is invalid." }, 422);
-        if (kickoff.getTime() <= Date.now()) return reply({
-          app: "JUDY AI", success: false, error: "Predictions are only generated and stored before kick-off.",
-          fixtureId: target.id, startingAt: target.starting_at
-        }, 409);
+        if (kickoff.getTime() <= Date.now()) {
+          const saved = await savedPredictionPayload(env, fixtureId);
+          if (saved) return reply(saved);
+          return reply({
+            app: "JUDY AI", success: false, error: "No pre-kickoff prediction was saved for this match.",
+            fixtureId: target.id, startingAt: target.starting_at
+          }, 409);
+        }
         const endDate = target.starting_at.slice(0, 10);
         const start = new Date(kickoff.getTime() - 180 * 86400000).toISOString().slice(0, 10);
 
