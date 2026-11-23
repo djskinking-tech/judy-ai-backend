@@ -1369,45 +1369,75 @@ export default {
     }
 
     try {
-      const matches = [];
       const maxPages = 20;
-      let pageNumber = 1;
-      let providerPagination = null;
-      let pageLimitReached = false;
-
-      while (pageNumber <= maxPages) {
-        const apiUrl = new URL("https://api.sportmonks.com/v3/football/fixtures/date/" + date);
-        apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
-        apiUrl.searchParams.set("include", "participants;league;scores;state;venue");
-        apiUrl.searchParams.set("per_page", "50");
-        apiUrl.searchParams.set("page", String(pageNumber));
-        apiUrl.searchParams.set("timezone", "Africa/Nairobi");
-
-        const upstream = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
-        const raw = await upstream.text();
-        let data;
-        try { data = JSON.parse(raw); }
-        catch {
-          return reply({ error: "Sportmonks returned an unreadable response", providerStatus: upstream.status, page: pageNumber }, 502);
+      async function fetchDatePages(requestDate, timezone) {
+        const rows = [];
+        let pageNumber = 1;
+        let pagination = null;
+        while (pageNumber <= maxPages) {
+          const apiUrl = new URL("https://api.sportmonks.com/v3/football/fixtures/date/" + requestDate);
+          apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
+          apiUrl.searchParams.set("include", "participants;league;scores;state;venue");
+          apiUrl.searchParams.set("per_page", "50");
+          apiUrl.searchParams.set("page", String(pageNumber));
+          if (timezone) apiUrl.searchParams.set("timezone", timezone);
+          const upstream = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
+          const raw = await upstream.text();
+          let data;
+          try { data = JSON.parse(raw); }
+          catch { throw new Error("Sportmonks returned unreadable data (HTTP " + upstream.status + ") for " + requestDate + "."); }
+          if (!upstream.ok) {
+            const error = new Error("Sportmonks request failed (HTTP " + upstream.status + ") for " + requestDate + ".");
+            error.status = upstream.status;
+            error.details = data;
+            throw error;
+          }
+          const pageRows = Array.isArray(data.data) ? data.data : [];
+          rows.push(...pageRows);
+          pagination = data.pagination || pagination;
+          if (!pagination || pagination.has_more !== true || pageRows.length === 0) break;
+          pageNumber++;
         }
-        if (!upstream.ok) {
-          return reply({ error: "Sportmonks request failed", providerStatus: upstream.status, details: data, page: pageNumber }, upstream.status);
-        }
-
-        const pageMatches = Array.isArray(data.data) ? data.data : [];
-        matches.push(...pageMatches);
-        providerPagination = data.pagination || providerPagination;
-        const hasMore = Boolean(data.pagination && (
-          data.pagination.has_more === true ||
-          (data.pagination.next_page !== null && data.pagination.next_page !== undefined)
-        ));
-        if (!hasMore || pageMatches.length === 0) break;
-        pageNumber++;
+        return { rows, pagination, pagesFetched: Math.min(pageNumber, maxPages), pageLimitReached: pageNumber > maxPages && Boolean(pagination && pagination.has_more) };
       }
 
-      if (pageNumber > maxPages && providerPagination && providerPagination.has_more === true) {
-        pageLimitReached = true;
+      // First ask Sportmonks for the exact Nairobi calendar day.
+      let primary = await fetchDatePages(date, "Africa/Nairobi");
+      let matches = primary.rows;
+      let source = "nairobi_timezone";
+      let fallbackDatesChecked = [];
+
+      // Some provider plans/data feeds can return an empty timezone-scoped day
+      // while UTC date partitions still contain those same fixtures. Check the
+      // adjacent UTC dates and retain only kick-offs that fall on the Nairobi day.
+      if (!matches.length) {
+        source = "utc_date_fallback";
+        const base = new Date(date + "T12:00:00Z");
+        const utcDates = [-1, 0, 1].map(offset => {
+          const d = new Date(base);
+          d.setUTCDate(d.getUTCDate() + offset);
+          return d.toISOString().slice(0, 10);
+        });
+        const fallbackRows = [];
+        for (const utcDate of utcDates) {
+          fallbackDatesChecked.push(utcDate);
+          const page = await fetchDatePages(utcDate, null);
+          fallbackRows.push(...page.rows);
+        }
+        const formatter = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit"
+        });
+        const unique = new Map();
+        for (const fixture of fallbackRows) {
+          const rawKickoff = fixture && fixture.starting_at;
+          const kickoff = rawKickoff ? new Date(String(rawKickoff).replace(" ", "T") + "Z") : null;
+          if (!kickoff || Number.isNaN(kickoff.getTime())) continue;
+          const localDate = formatter.format(kickoff);
+          if (localDate === date && fixture.id != null) unique.set(String(fixture.id), fixture);
+        }
+        matches = [...unique.values()];
       }
+
       const result = {
         app: "JUDY AI",
         success: true,
@@ -1415,15 +1445,12 @@ export default {
         date,
         timezone: "Africa/Nairobi",
         total: matches.length,
+        source,
+        fallbackDatesChecked,
         pagination: {
-          count: matches.length,
-          per_page: 50,
-          current_page: Math.min(pageNumber, maxPages),
-          next_page: null,
-          has_more: pageLimitReached,
-          pages_fetched: Math.min(pageNumber, maxPages),
-          page_limit_reached: pageLimitReached,
-          provider: providerPagination
+          pages_fetched: primary.pagesFetched,
+          page_limit_reached: primary.pageLimitReached,
+          provider: primary.pagination || null
         },
         fixtures: matches,
         matches
