@@ -8,6 +8,7 @@
   <title>JUDY AI — Football Intelligence</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
+  <script src="/dashboard.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -32,7 +33,7 @@
 
       <section class="section-heading">
         <div><p class="eyebrow">MATCH CENTER</p><h2>Fixtures</h2></div>
-        <div class="provider-badge"><span class="provider-dot"></span> POWERED BY HIGHLIGHTLY</div>
+        <div class="provider-badge"><span class="provider-dot"></span> POWERED BY SPORTMONKS</div>
       </section>
 
       <section class="control-panel">
@@ -52,14 +53,18 @@
       </section>
       <section id="fixtures" class="fixtures-grid" aria-live="polite"></section>
 
-      <section class="prediction-panel">
-        <div class="prediction-symbol">✧</div>
-        <div class="prediction-copy">
-          <p class="eyebrow">COMING NEXT</p>
-          <h2>JUDY prediction engine</h2>
-          <p>Ranked half-time and full-time correct-score predictions, confidence estimates and an accuracy tracker are in development. JUDY will not display invented predictions.</p>
+      <section id="performance-dashboard" class="performance-section">
+        <div class="performance-heading">
+          <div><p class="eyebrow">LEARN FROM EVERY MATCH</p><h2>Prediction performance</h2>
+          <p class="performance-intro">Measured results from predictions saved before kick-off. No unplayed match is counted as a hit or miss.</p></div>
+          <button id="refresh-performance" class="primary-button" type="button">Refresh data</button>
         </div>
-        <span class="development-pill">IN DEVELOPMENT</span>
+        <p id="performance-status" class="performance-status" role="status">Loading performance data…</p>
+        <div id="performance-totals" class="totals-grid"></div>
+        <div id="model-performance" class="model-grid"></div>
+        <div class="records-heading"><h3>Prediction history</h3><span>Saved before kick-off</span></div>
+        <div id="prediction-records" class="prediction-records"></div>
+        <p class="performance-note">V2.1 is experimental and not yet validated. Accuracy is shown only after actual results have been collected and evaluated.</p>
       </section>
     </main>
 
