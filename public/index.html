@@ -54,7 +54,11 @@
       <section class="control-panel">
         <label for="match-date">MATCH DATE</label>
         <input id="match-date" type="date">
-        <button id="tomorrow-matches" class="secondary-button" type="button">Tomorrow’s matches</button>
+        <div class="quick-date-options" role="group" aria-label="Quick match dates">
+          <button class="date-option" data-date-offset="-1" type="button">Yesterday</button>
+          <button class="date-option active" data-date-offset="0" type="button" aria-pressed="true">Today</button>
+          <button class="date-option" data-date-offset="1" type="button">Tomorrow</button>
+        </div>
         <button id="load-matches" class="primary-button" type="button">Load fixtures <span>→</span></button>
       </section>
 
