@@ -1016,6 +1016,44 @@ export default {
         const htHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average, v1HtHome) : v1HtHome) : null;
         const htAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average, v1HtAway) : v1HtAway) : null;
         const sampleSize = { home: homeForm.length, away: awayForm.length };
+        function teamIntelligence(form, venue) {
+          const lastFive = form.slice(0, 5).map(item => {
+            const outcome = item.ft.scored > item.ft.conceded ? "W" :
+              item.ft.scored < item.ft.conceded ? "L" : "D";
+            return {
+              date: item.date,
+              fixtureId: item.fixtureId,
+              venue: item.venue || "Unknown",
+              goalsFor: item.ft.scored,
+              goalsAgainst: item.ft.conceded,
+              outcome
+            };
+          });
+          const venueRows = form.filter(item => item.venue === venue);
+          const selected = venueRows.length >= 2 ? venueRows : form;
+          const wins = selected.filter(item => item.ft.scored > item.ft.conceded).length;
+          const draws = selected.filter(item => item.ft.scored === item.ft.conceded).length;
+          const losses = selected.filter(item => item.ft.scored < item.ft.conceded).length;
+          return {
+            matchesAnalysed: form.length,
+            lastFive,
+            venueSplit: venueRows.length >= 2 ? venue : "All venues (insufficient venue sample)",
+            venueMatches: selected.length,
+            wins, draws, losses,
+            averageGoalsFor: Number(average(selected.map(item => item.ft.scored)).toFixed(2)),
+            averageGoalsAgainst: Number(average(selected.map(item => item.ft.conceded)).toFixed(2)),
+            firstHalfDataAvailable: form.filter(item => item.ht).length
+          };
+        }
+        const teamIntelligence = {
+          home: teamIntelligence(homeForm, "home"),
+          away: teamIntelligence(awayForm, "away"),
+          source: "Sportmonks completed fixture score history",
+          limitations: [
+            "This section describes recent results only; it does not confirm injuries, suspensions or starting lineups.",
+            "Venue splits use all-venue data when fewer than two matching home/away samples are available."
+          ]
+        };
         const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
         const result = {
           app: "JUDY AI",
@@ -1032,6 +1070,7 @@ export default {
             awayTeam: awayTeam.name
           },
           sampleSize,
+          teamIntelligence,
           venueAnalysis: {
             homeTeamHomeMatches: hft.venueMatches,
             awayTeamAwayMatches: aft.venueMatches,
