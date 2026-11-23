@@ -47,7 +47,7 @@ export default {
     }
 
     const date = url.searchParams.get("date");
-    if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return reply({ error: "Date must use YYYY-MM-DD format" }, 400);
     }
 
