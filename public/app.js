@@ -6,6 +6,55 @@ const countBox = document.getElementById("match-count");
 const caption = document.getElementById("results-caption");
 const dateOptionButtons = Array.from(document.querySelectorAll(".date-option"));
 
+const settingsToggle = document.getElementById("settings-toggle");
+const settingsPanel = document.getElementById("settings-panel");
+const settingsClose = document.getElementById("settings-close");
+const defaultMatchDay = document.getElementById("default-match-day");
+const autoLoadFixtures = document.getElementById("auto-load-fixtures");
+const autoRefreshLive = document.getElementById("auto-refresh-live");
+const compactFixtures = document.getElementById("compact-fixtures");
+const settingsSaved = document.getElementById("settings-saved");
+const SETTINGS_KEY = "judy-ai-preferences-v1";
+const defaultSettings = { defaultMatchDay: 0, autoLoadFixtures: true, autoRefreshLiveScores: true, compactFixtures: false };
+function readSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    return Object.assign({}, defaultSettings, saved, {
+      defaultMatchDay: Number(saved.defaultMatchDay) === 1 ? 1 : 0,
+      autoLoadFixtures: saved.autoLoadFixtures !== false,
+      autoRefreshLiveScores: saved.autoRefreshLiveScores !== false,
+      compactFixtures: saved.compactFixtures === true
+    });
+  } catch (error) { return Object.assign({}, defaultSettings); }
+}
+let appSettings = readSettings();
+function saveSettings() {
+  appSettings = {
+    defaultMatchDay: Number(defaultMatchDay.value) === 1 ? 1 : 0,
+    autoLoadFixtures: autoLoadFixtures.checked,
+    autoRefreshLiveScores: autoRefreshLive.checked,
+    compactFixtures: compactFixtures.checked
+  };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings)); } catch (error) {}
+  document.body.classList.toggle("compact-fixtures", appSettings.compactFixtures);
+  if (settingsSaved) settingsSaved.textContent = "Saved on this device.";
+}
+function applySettings() {
+  if (!defaultMatchDay) return;
+  defaultMatchDay.value = String(appSettings.defaultMatchDay);
+  autoLoadFixtures.checked = appSettings.autoLoadFixtures;
+  autoRefreshLive.checked = appSettings.autoRefreshLiveScores;
+  compactFixtures.checked = appSettings.compactFixtures;
+  document.body.classList.toggle("compact-fixtures", appSettings.compactFixtures);
+}
+function toggleSettings(open) {
+  if (!settingsPanel || !settingsToggle) return;
+  const shouldOpen = typeof open === "boolean" ? open : settingsPanel.hidden;
+  settingsPanel.hidden = !shouldOpen;
+  settingsToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  if (shouldOpen) settingsPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 const liveScoreList = document.getElementById("live-score-list");
 const liveScoreUpdated = document.getElementById("live-score-updated");
 const refreshLiveScoresButton = document.getElementById("refresh-live-scores");
@@ -491,7 +540,11 @@ async function loadFixtures() {
     const matches = getMatches(payload);
     renderMatches(matches);
     caption.textContent = "Fixtures for " + date + " · East Africa Time";
-    showMessage("Fixtures loaded", "Received " + matches.length + " matches from Sportmonks.", "success");
+    if (matches.length) {
+      showMessage("Fixtures loaded", "Received " + matches.length + " matches from Sportmonks.", "success");
+    } else {
+      showMessage("No fixtures in the returned data", "Sportmonks returned zero matches for this date. It may be outside the leagues included in the current subscription. Try another date or an included league. JUDY AI will not invent fixtures.", "error");
+    }
   } catch (error) {
     fixturesBox.innerHTML = "";
     countBox.textContent = "— MATCHES";
@@ -501,7 +554,13 @@ async function loadFixtures() {
     loadButton.innerHTML = 'Load fixtures <span>→</span>';
   }
 }
-dateInput.value = nairobiToday();
+applySettings();
+dateInput.value = nairobiDateOffset(appSettings.defaultMatchDay);
+dateOptionButtons.forEach(function (button) {
+  const selected = Number(button.dataset.dateOffset) === appSettings.defaultMatchDay;
+  button.classList.toggle("active", selected);
+  button.setAttribute("aria-pressed", selected ? "true" : "false");
+});
 document.getElementById("year").textContent = new Date().getFullYear();
 loadButton.addEventListener("click", loadFixtures);
 function setQuickDate(offset) {
@@ -531,8 +590,24 @@ dateInput.addEventListener("change", function () {
 if (refreshLiveScoresButton) refreshLiveScoresButton.addEventListener("click", loadLiveScores);
 loadLiveScores();
 liveScoreTimer = setInterval(function () {
-  if (!document.hidden) loadLiveScores();
+  if (appSettings.autoRefreshLiveScores && !document.hidden) loadLiveScores();
 }, 30000);
+if (settingsToggle) settingsToggle.addEventListener("click", function () { toggleSettings(); });
+if (settingsClose) settingsClose.addEventListener("click", function () { toggleSettings(false); });
+[defaultMatchDay, autoLoadFixtures, autoRefreshLive, compactFixtures].forEach(function (control) {
+  if (control) control.addEventListener("change", function () {
+    saveSettings();
+    if (control === defaultMatchDay) {
+      dateInput.value = nairobiDateOffset(appSettings.defaultMatchDay);
+      dateOptionButtons.forEach(function (button) {
+        const selected = Number(button.dataset.dateOffset) === appSettings.defaultMatchDay;
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
+    }
+  });
+});
+if (appSettings.autoLoadFixtures) loadFixtures();
 
 fixturesBox.addEventListener("click", function (event) {
   const oddsButton = event.target.closest(".odds-button");
