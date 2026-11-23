@@ -112,21 +112,22 @@ function predictionOptionsMarkup(period, data) {
 }
 function predictionOutcomeMarkup(payload) {
   const tracking = payload && payload.tracking ? payload.tracking : {};
-  if (tracking.recordStatus !== "completed") {
-    return '<section class="prediction-outcome pending"><strong>RESULT TRACKING</strong><p>⏳ Match result pending. JUDY AI will check the final score automatically.</p></section>';
-  }
   const actual = tracking.actual || {};
   const evaluation = tracking.evaluation && tracking.evaluation.v2_1 ? tracking.evaluation.v2_1 : {};
   function period(label, key, actualScore) {
     const hit = evaluation[key] && evaluation[key].topTwo;
-    const status = hit === true ? "WON" : hit === false ? "LOST" : "RESULT UNAVAILABLE";
-    const scoreText = actualScore ? "Actual score: " + escapeHtml(actualScore) : "Actual score unavailable";
+    const status = hit === true ? "WON" : hit === false ? "LOST" :
+      actualScore ? "RESULT CHECKING" : "PENDING";
+    const scoreText = actualScore ? "Actual score: " + escapeHtml(actualScore) :
+      "Score not available yet";
     return '<div class="outcome-period"><b>' + label + ': ' + status + '</b><span>' + scoreText + '</span></div>';
   }
-  return '<section class="prediction-outcome completed"><strong>JUDY AI RESULT TRACKING</strong>' +
+  const complete = tracking.recordStatus === "completed";
+  return '<section class="prediction-outcome ' + (complete ? "completed" : "pending") + '">' +
+    '<strong>JUDY AI RESULT TRACKING</strong>' +
     period("HALF-TIME", "halfTime", actual.halfTime) +
     period("FULL-TIME", "fullTime", actual.fullTime) +
-    '<small>WON means the actual score matched one of JUDY AI’s two ranked options.</small></section>';
+    '<small>WON means the actual score matched one of JUDY AI’s two ranked options. HT is checked at half-time; FT after the final whistle.</small></section>';
 }
 function playerWatchMarkup(data) {
   if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
