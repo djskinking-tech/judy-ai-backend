@@ -140,6 +140,11 @@ function leagueName(match) {
   const league = match.league || match.competition || {};
   return league.name || match.tournament?.name || "Football";
 }
+function fixtureIsFinished(match) {
+  const state = match.state || {};
+  const value = [state.state, state.name, state.short_name, state.developer_name, match.status].filter(Boolean).join(" ").toUpperCase();
+  return /(^|\\b)(FT|AET|PEN|FULL TIME|AFTER EXTRA TIME|AFTER PENALTIES)(\\b|$)/.test(value);
+}
 function fixtureFinalScore(match) {
   const participants = Array.isArray(match.participants) ? match.participants : [];
   const home = participants.find(function (team) { return team.meta && team.meta.location === "home"; });
@@ -186,7 +191,7 @@ function renderMatches(matches) {
         '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
-      '<div class="prediction-actions"><button class="prediction-button" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">Generate AI predictions</button></div>' +
+      '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button></div>' +
       '<div class="prediction-results" id="prediction-' + escapeHtml(match.id || match.fixture_id || "") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>' +
     '</article>';
   }).join("");
@@ -205,8 +210,14 @@ async function loadSavedPredictions(matches) {
       const button = document.querySelector(".prediction-button[data-fixture-id=\"" + id + "\"]");
       if (!panel || !button) return;
       if (!saved) {
-        panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
-        button.textContent = "Generate now";
+        if (button.dataset.finished === "true") {
+          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>No pre-match prediction was saved. The actual score is shown above; prediction accuracy cannot be calculated.</b></div>';
+          button.textContent = "Match finished";
+          button.disabled = true;
+        } else {
+          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
+          button.textContent = "Generate now";
+        }
         return;
       }
       panel.innerHTML = predictionOptionsMarkup("Half-time", saved.predictions && saved.predictions.halfTime) +
