@@ -193,3 +193,5 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
   .settings-grid{grid-template-columns:1fr}
   .setting-item{padding:12px}
 }
+
+.record-row .record-prediction{font-size:9px;color:#9fc5e8;margin-top:7px;line-height:1.5;overflow-wrap:anywhere}.record-row .record-outcome{display:block;margin-top:5px;font-size:9px;line-height:1.45}
