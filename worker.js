@@ -92,10 +92,10 @@ export default {
       let rawIds = (url.searchParams.get("fixtureIds") || "").split(",").map(v => v.trim()).filter(Boolean);
       const dateParam = url.searchParams.get("date");
       const limit = Math.max(1, Math.min(2, Number(url.searchParams.get("limit") || 2)));
-      if (rawIds.length && (dateParam || rawIds.length > 5 || rawIds.some(id => !/^\\d+$/.test(id)))) {
+      if (rawIds.length && (dateParam || rawIds.length > 5 || rawIds.some(id => !/^[0-9]+$/.test(id)))) {
         return reply({ error: "Use either fixtureIds (1 to 5 IDs) or date (YYYY-MM-DD), not both." }, 400);
       }
-      if (!rawIds.length && (!dateParam || !/^\\d{4}-\\d{2}-\\d{2}$/.test(dateParam))) {
+      if (!rawIds.length && (!dateParam || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateParam))) {
         return reply({ error: "Provide fixtureIds or a past date in YYYY-MM-DD format." }, 400);
       }
 
