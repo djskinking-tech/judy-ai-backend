@@ -172,7 +172,7 @@ function logoMarkup(url) {
   return '<img src="' + escapeHtml(url) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
 }
 function oddsLabel(value) {
-  return String(value == null ? "" : value).toLowerCase().trim().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
+  return String(value == null ? "" : value).toLowerCase().trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 function oddsMarketType(row) {
   const market = oddsLabel(row.market);
@@ -226,7 +226,7 @@ function renderOddsMarkup(payload) {
 async function loadFixtureOdds(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("odds-" + fixtureId);
-  if (!panel || !/^\\d+$/.test(fixtureId || "")) return;
+  if (!panel || !/^\d+$/.test(fixtureId || "")) return;
   if (panel.dataset.loaded === "true") {
     panel.hidden = !panel.hidden;
     button.textContent = panel.hidden ? "Show odds" : "Hide odds";
