@@ -1,6 +1,65 @@
 const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
 const CACHE_TTL = 900;
 
+async function sportmonksRequest(env, path, params = {}) {
+  const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
+  for (const [key, value] of Object.entries(params)) apiUrl.searchParams.set(key, value);
+  apiUrl.searchParams.sort();
+
+  const cache = caches.default;
+  const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/api-v1/" +
+    encodeURIComponent(path) + "?" + apiUrl.searchParams.toString());
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    const body = await cached.json();
+    if (body && Object.prototype.hasOwnProperty.call(body, "data")) return body.data;
+  }
+
+  const cooldownKey = new Request("https://judy-ai-cache.example/sportmonks/cooldown");
+  const cooldown = await cache.match(cooldownKey);
+  if (cooldown) {
+    const info = await cooldown.json();
+    const error = new Error("Sportmonks rate limit cooldown is active; retry later.");
+    error.status = 429;
+    error.retryAfterSeconds = info.retryAfterSeconds || 60;
+    error.details = info;
+    throw error;
+  }
+
+  apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
+  const response = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
+  const raw = await response.text();
+  let body;
+  try { body = JSON.parse(raw); }
+  catch { throw new Error("Sportmonks returned unreadable data (HTTP " + response.status + ")."); }
+
+  if (!response.ok) {
+    const error = new Error("Sportmonks request failed (HTTP " + response.status + ").");
+    error.status = response.status;
+    error.details = body;
+    if (response.status === 429) {
+      const headerDelay = Number(response.headers.get("Retry-After"));
+      const retryAfterSeconds = Number.isFinite(headerDelay) && headerDelay > 0 ? headerDelay : 60;
+      error.retryAfterSeconds = retryAfterSeconds;
+      await cache.put(cooldownKey, new Response(JSON.stringify({
+        retryAfterSeconds,
+        message: "A short cooldown prevents repeated requests while Sportmonks rate limits the account."
+      }), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + retryAfterSeconds } }));
+    }
+    throw error;
+  }
+
+  // Historical fixture and team-history responses are effectively immutable.
+  // Cache them for 30 days; keep fixture detail and date listings fresher.
+  const ttl = path.startsWith("fixtures/between/") ? 2592000 :
+    (/^fixtures\/\d+$/.test(path) ? 21600 : 300);
+  await cache.put(cacheKey, new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + ttl }
+  }));
+  return body.data;
+}
+
+
 
 function poissonProb(lambda, goals) {
   let p = Math.exp(-lambda);
@@ -142,20 +201,7 @@ export default {
       }
 
       async function sportmonks(path, params = {}) {
-        const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
-        apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
-        for (const [key, value] of Object.entries(params)) apiUrl.searchParams.set(key, value);
-        const response = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
-        const raw = await response.text();
-        let body;
-        try { body = JSON.parse(raw); } catch { throw new Error("Sportmonks returned unreadable data (HTTP " + response.status + ")."); }
-        if (!response.ok) {
-          const error = new Error("Sportmonks request failed (HTTP " + response.status + ").");
-          error.status = response.status;
-          error.details = body;
-          throw error;
-        }
-        return body.data;
+        return sportmonksRequest(env, path, params);
       }
 
       function weightedAverage(values, weights) {
@@ -272,14 +318,13 @@ export default {
           }
           const endDate = target.starting_at.slice(0, 10);
           const startDate = new Date(kickoff.getTime() - 180 * 86400000).toISOString().slice(0, 10);
-          const [homeHistory, awayHistory] = await Promise.all([
-            sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + homeTeam.id, {
-              include: "scores;participants;league", per_page: "50", order: "desc"
-            }),
-            sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + awayTeam.id, {
-              include: "scores;participants;league", per_page: "50", order: "desc"
-            })
-          ]);
+          // Keep provider traffic sequential; cached history prevents repeat downloads.
+          const homeHistory = await sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + homeTeam.id, {
+            include: "scores;participants;league", per_page: "50", order: "desc"
+          });
+          const awayHistory = await sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + awayTeam.id, {
+            include: "scores;participants;league", per_page: "50", order: "desc"
+          });
 
           function recentForm(rows, teamId) {
             return (Array.isArray(rows) ? rows : [])
@@ -430,6 +475,7 @@ export default {
         return reply({
           error: error.message || "Historical backtest failed",
           providerStatus: error.status || null,
+          retryAfterSeconds: error.retryAfterSeconds || null,
           details: error.details || null
         }, error.status || 502);
       }
@@ -452,20 +498,7 @@ export default {
       });
 
       async function sportmonks(path, params = {}) {
-        const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
-        apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
-        for (const [key, value] of Object.entries(params)) apiUrl.searchParams.set(key, value);
-        const response = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
-        const raw = await response.text();
-        let body;
-        try { body = JSON.parse(raw); } catch { throw new Error("Sportmonks returned unreadable data (HTTP " + response.status + ")."); }
-        if (!response.ok) {
-          const error = new Error("Sportmonks request failed (HTTP " + response.status + ").");
-          error.status = response.status;
-          error.details = body;
-          throw error;
-        }
-        return body.data;
+        return sportmonksRequest(env, path, params);
       }
 
       try {
