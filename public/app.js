@@ -115,19 +115,30 @@ function predictionOutcomeMarkup(payload) {
   const actual = tracking.actual || {};
   const evaluation = tracking.evaluation && tracking.evaluation.v2_1 ? tracking.evaluation.v2_1 : {};
   function period(label, key, actualScore) {
-    const hit = evaluation[key] && evaluation[key].topTwo;
-    const status = hit === true ? "WON" : hit === false ? "LOST" :
-      actualScore ? "RESULT CHECKING" : "PENDING";
-    const scoreText = actualScore ? "Actual score: " + escapeHtml(actualScore) :
-      "Score not available yet";
-    return '<div class="outcome-period"><b>' + label + ': ' + status + '</b><span>' + scoreText + '</span></div>';
+    let hit = evaluation[key] && evaluation[key].topTwo;
+    // Fall back to the saved two ranked scores if an older tracking record
+    // has an actual score but does not yet contain its evaluation.
+    if (typeof hit !== "boolean" && actualScore) {
+      const options = payload && payload.predictions && payload.predictions[key] &&
+        Array.isArray(payload.predictions[key].options) ? payload.predictions[key].options : [];
+      if (options.length) {
+        hit = options.some(function (option) {
+          return String(option.score || "").trim() === String(actualScore).trim();
+        });
+      }
+    }
+    const status = hit === true ? "WON ✅" : hit === false ? "LOST ❌" : "PENDING ⏳";
+    const statusClass = hit === true ? "outcome-won" : hit === false ? "outcome-lost" : "outcome-pending";
+    const scoreText = actualScore ? "Actual: " + escapeHtml(actualScore) : "Actual score: pending";
+    return '<div class="outcome-period"><b class="' + statusClass + '">' + label + ': ' + status +
+      '</b><span>' + scoreText + '</span></div>';
   }
   const complete = tracking.recordStatus === "completed";
   return '<section class="prediction-outcome ' + (complete ? "completed" : "pending") + '">' +
     '<strong>JUDY AI RESULT TRACKING</strong>' +
     period("HALF-TIME", "halfTime", actual.halfTime) +
     period("FULL-TIME", "fullTime", actual.fullTime) +
-    '<small>WON means the actual score matched one of JUDY AI’s two ranked options. HT is checked at half-time; FT after the final whistle.</small></section>';
+    '<small>WON ✅ means at least one of JUDY AI’s two ranked scores matched. LOST ❌ means neither matched. Results remain PENDING ⏳ until the official score is available.</small></section>';
 }
 function playerWatchMarkup(data) {
   if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
