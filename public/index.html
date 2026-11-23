@@ -17,7 +17,10 @@
         <span class="brand-mark">J</span>
         <span><strong>JUDY <em>AI</em></strong><small>FOOTBALL INTELLIGENCE</small></span>
       </a>
-      <div class="live-indicator"><span></span> DATA CENTER</div>
+      <div class="topbar-actions">
+        <div class="live-indicator"><span></span> DATA CENTER</div>
+        <button id="settings-toggle" class="secondary-button settings-toggle" type="button" aria-expanded="false" aria-controls="settings-panel">Settings</button>
+      </div>
     </header>
 
     <nav class="section-nav" aria-label="Main sections">
@@ -25,6 +28,19 @@
       <a href="#fixtures-center">Fixtures</a>
       <a href="#performance-dashboard">Predictions & results</a>
     </nav>
+
+    <section id="settings-panel" class="settings-panel" aria-label="JUDY AI preferences" hidden>
+      <div class="settings-heading"><div><p class="eyebrow">YOUR APP</p><h2>Preferences</h2></div><button id="settings-close" class="text-button" type="button">Close</button></div>
+      <div class="settings-grid">
+        <label class="setting-item" for="default-match-day"><span><strong>Default match date</strong><small>Choose which fixtures appear when JUDY AI opens.</small></span>
+          <select id="default-match-day"><option value="0">Today</option><option value="1">Tomorrow</option></select>
+        </label>
+        <label class="setting-item setting-check" for="auto-load-fixtures"><span><strong>Load fixtures automatically</strong><small>Fetch the selected date when the app opens.</small></span><input id="auto-load-fixtures" type="checkbox"></label>
+        <label class="setting-item setting-check" for="auto-refresh-live"><span><strong>Refresh live scores</strong><small>Update live matches every 30 seconds while the app is open.</small></span><input id="auto-refresh-live" type="checkbox"></label>
+        <label class="setting-item setting-check" for="compact-fixtures"><span><strong>Compact fixture cards</strong><small>Use a denser layout to see more matches on your screen.</small></span><input id="compact-fixtures" type="checkbox"></label>
+      </div>
+      <p id="settings-saved" class="settings-saved" role="status">Preferences are saved on this device.</p>
+    </section>
 
     <main>
       <section class="hero">
