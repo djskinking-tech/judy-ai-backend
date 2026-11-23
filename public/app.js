@@ -4,6 +4,7 @@ const messageBox = document.getElementById("message");
 const fixturesBox = document.getElementById("fixtures");
 const countBox = document.getElementById("match-count");
 const caption = document.getElementById("results-caption");
+const tomorrowButton = document.getElementById("tomorrow-matches");
 
 function nairobiToday() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -12,6 +13,11 @@ function nairobiToday() {
   const values = {};
   parts.forEach(function (part) { values[part.type] = part.value; });
   return values.year + "-" + values.month + "-" + values.day;
+}
+function nairobiDateOffset(days) {
+  const date = new Date(nairobiToday() + "T12:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 function escapeHtml(value) {
   return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
@@ -215,6 +221,10 @@ async function loadFixtures() {
 dateInput.value = nairobiToday();
 document.getElementById("year").textContent = new Date().getFullYear();
 loadButton.addEventListener("click", loadFixtures);
+tomorrowButton.addEventListener("click", function () {
+  dateInput.value = nairobiDateOffset(1);
+  loadFixtures();
+});
 fixturesBox.addEventListener("click", function (event) {
   const button = event.target.closest(".prediction-button");
   if (button) generatePrediction(button);
