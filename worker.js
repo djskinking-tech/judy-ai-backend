@@ -489,7 +489,8 @@ export default {
 
         function recentForm(rows, teamId) {
           return (Array.isArray(rows) ? rows : [])
-            .filter(f => Number(f.id) !== Number(fixtureId))
+            .filter(f => Number(f.id) !== Number(fixtureId) &&
+              new Date(String(f.starting_at || "").replace(" ", "T") + "Z").getTime() < kickoff.getTime())
             .map(f => {
               const participant = Array.isArray(f.participants)
                 ? f.participants.find(p => Number(p.id) === Number(teamId))
