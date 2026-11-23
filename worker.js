@@ -594,6 +594,39 @@ export default {
       });
     }
 
+    if (url.pathname === "/api/live-scores") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
+      const liveCache = caches.default;
+      const liveCacheKey = new Request("https://judy-ai-cache.example/live-scores/v1");
+      const cachedLive = await liveCache.match(liveCacheKey);
+      if (cachedLive) return new Response(cachedLive.body, { status: cachedLive.status, headers: cachedLive.headers });
+      try {
+        const fixtures = await sportmonksRequest(env, "livescores/inplay", {
+          include: "participants;scores;state;events"
+        }, { bypassCache: true });
+        const payload = {
+          app: "JUDY AI",
+          success: true,
+          mode: "live_scores",
+          updatedAt: new Date().toISOString(),
+          matches: Array.isArray(fixtures) ? fixtures : []
+        };
+        const response = new Response(JSON.stringify(payload), {
+          headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=15" }
+        });
+        await liveCache.put(liveCacheKey, response.clone());
+        return reply(payload);
+      } catch (error) {
+        return reply({
+          app: "JUDY AI", success: false,
+          error: error && error.status === 429 ? "Live scores are temporarily rate-limited. Please retry shortly." : "Could not load live scores.",
+          providerStatus: error && error.status || null,
+          retryAfterSeconds: error && error.retryAfterSeconds || null
+        }, error && error.status === 429 ? 429 : 502);
+      }
+    }
+
     if (url.pathname === "/api/tracking") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.JUDY_PREDICTIONS) return reply({
