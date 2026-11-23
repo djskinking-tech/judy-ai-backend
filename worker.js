@@ -17,8 +17,6 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // Serve the website (HTML, CSS, and JavaScript) from the configured
-    // Workers Static Assets directory. Keep /api/* handled by this Worker.
     if (!url.pathname.startsWith("/api/")) {
       return env.ASSETS.fetch(request);
     }
@@ -42,8 +40,8 @@ export default {
       return reply({ error: "GET method required" }, 405);
     }
 
-    if (!env.HIGHLIGHTLY_API_KEY) {
-      return reply({ error: "Highlightly API key is not configured" }, 500);
+    if (!env.SPORTMONKS_API_TOKEN) {
+      return reply({ error: "Sportmonks API token is not configured" }, 500);
     }
 
     const date = url.searchParams.get("date");
@@ -52,7 +50,7 @@ export default {
     }
 
     const cache = caches.default;
-    const cacheKey = new Request("https://judy-ai-cache.example/matches/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/" + date);
     const cached = await cache.match(cacheKey);
 
     if (cached) {
@@ -65,17 +63,14 @@ export default {
       });
     }
 
-    const apiUrl = new URL("https://soccer.highlightly.net/matches");
-    apiUrl.searchParams.set("date", date);
-    apiUrl.searchParams.set("timezone", "Africa/Nairobi");
-    apiUrl.searchParams.set("limit", "100");
+    const apiUrl = new URL("https://api.sportmonks.com/v3/football/fixtures/date/" + date);
+    apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
+    apiUrl.searchParams.set("include", "participants;league;state;venue");
+    apiUrl.searchParams.set("per_page", "50");
 
     try {
       const upstream = await fetch(apiUrl.toString(), {
-        headers: {
-          "x-rapidapi-key": env.HIGHLIGHTLY_API_KEY,
-          "Accept": "application/json"
-        }
+        headers: { "Accept": "application/json" }
       });
 
       const raw = await upstream.text();
@@ -84,32 +79,28 @@ export default {
         data = JSON.parse(raw);
       } catch {
         return reply({
-          error: "Highlightly returned an invalid response",
+          error: "Sportmonks returned an unreadable response",
           providerStatus: upstream.status
         }, 502);
       }
 
       if (!upstream.ok) {
         return reply({
-          error: "Highlightly request failed",
+          error: "Sportmonks request failed",
           providerStatus: upstream.status,
           details: data
         }, upstream.status);
       }
 
-      let matches = [];
-      if (Array.isArray(data)) matches = data;
-      else if (Array.isArray(data.data)) matches = data.data;
-      else if (Array.isArray(data.matches)) matches = data.matches;
-      else if (Array.isArray(data.response)) matches = data.response;
-
+      const matches = Array.isArray(data.data) ? data.data : [];
       const result = {
         app: "JUDY AI",
         success: true,
-        provider: "Highlightly",
+        provider: "Sportmonks",
         date,
         timezone: "Africa/Nairobi",
         total: matches.length,
+        pagination: data.pagination || null,
         fixtures: matches,
         matches
       };
@@ -124,7 +115,7 @@ export default {
       return reply(result);
     } catch (error) {
       return reply({
-        error: "Could not connect to Highlightly",
+        error: "Could not connect to Sportmonks",
         details: error.message
       }, 502);
     }
