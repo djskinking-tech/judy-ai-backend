@@ -86,15 +86,21 @@ function topScoreOptions(homeLambda, awayLambda) {
 }
 
 function goalsForAgainst(fixture, teamId, period) {
-  const scores = Array.isArray(fixture.scores) ? fixture.scores : [];
-  const periodRows = scores.filter(s => s.description === period);
-  if (!periodRows.length) return null;
-  const teamRow = periodRows.find(s => Number(s.participant_id) === Number(teamId));
-  if (!teamRow || !teamRow.score) return null;
-  const teamSide = teamRow.score.participant;
-  const opponentRow = periodRows.find(s => s.score && s.score.participant !== teamSide);
-  if (!opponentRow || !Number.isFinite(Number(teamRow.score.goals)) ||
-      !Number.isFinite(Number(opponentRow.score.goals))) return null;
+  const scores = Array.isArray(fixture && fixture.scores) ? fixture.scores : [];
+  const normalize = value => String(value || "").toUpperCase().replace(/[\\s-]+/g, "_");
+  const wanted = normalize(period);
+  const aliases = wanted === "1ST_HALF" ? new Set(["1ST_HALF", "FIRST_HALF", "HALF_TIME", "HT"]) :
+    wanted === "CURRENT" ? new Set(["CURRENT", "FULL_TIME", "FT"]) : new Set([wanted]);
+  const periodRows = scores.filter(row => aliases.has(normalize(row && row.description)));
+  const teamRow = periodRows.find(row => Number(row && row.participant_id) === Number(teamId));
+  if (!teamRow || !teamRow.score || !Number.isFinite(Number(teamRow.score.goals))) return null;
+  // Match the opponent by participant ID. Sportmonks score.participant labels
+  // are not consistently present in every fixture response.
+  const opponentRow = periodRows.find(row =>
+    Number(row && row.participant_id) !== Number(teamId) &&
+    row && row.score && Number.isFinite(Number(row.score.goals))
+  );
+  if (!opponentRow) return null;
   return {
     scored: Number(teamRow.score.goals),
     conceded: Number(opponentRow.score.goals)
@@ -446,11 +452,28 @@ export default {
             const awayHT = goalsForAgainst(fixture, away.id, "1ST_HALF");
             const actualHT = homeHT && awayHT ? homeHT.scored + "-" + awayHT.scored : null;
             record.actual = record.actual || { fullTime: null, halfTime: null };
-            if (actualHT && record.actual.halfTime !== actualHT) {
+            // Keep a compact, token-free trace so a missing provider score can be diagnosed.
+            record.scoreDiagnostics = {
+              checkedAt: new Date().toISOString(),
+              state: fixture.state ? {
+                state: fixture.state.state || null,
+                name: fixture.state.name || null,
+                short_name: fixture.state.short_name || null,
+                developer_name: fixture.state.developer_name || null
+              } : null,
+              scoreRows: (Array.isArray(fixture.scores) ? fixture.scores : []).map(row => ({
+                description: row.description || null,
+                participant_id: row.participant_id || null,
+                goals: row.score && row.score.goals !== undefined ? row.score.goals : null
+              }))
+            };
+            if (actualHT) {
+              const isNewHT = record.actual.halfTime !== actualHT;
               record.actual.halfTime = actualHT;
-              record.halfTimeCheckedAt = new Date().toISOString();
+              record.halfTimeCheckedAt = record.halfTimeCheckedAt || new Date().toISOString();
+              // Recalculate on every check so a previously stored score cannot remain unevaluated.
               record.evaluation = evaluateTrackedRecord(record, record.actual.fullTime || null, actualHT);
-              run.fixturesHalfTimeEvaluated = (run.fixturesHalfTimeEvaluated || 0) + 1;
+              if (isNewHT) run.fixturesHalfTimeEvaluated = (run.fixturesHalfTimeEvaluated || 0) + 1;
             }
 
             if (!isFixtureFinished(fixture)) {
