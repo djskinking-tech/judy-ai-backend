@@ -52,12 +52,22 @@
       const evaluation = item.evaluation && item.evaluation.v2_1 ? item.evaluation.v2_1 : {};
       const ftHit = evaluation.fullTime ? evaluation.fullTime.topTwo : null;
       const htHit = evaluation.halfTime ? evaluation.halfTime.topTwo : null;
+      const predictions = item.predictions || {};
+      function scores(period) {
+        const options = predictions[period] && Array.isArray(predictions[period].options)
+          ? predictions[period].options : [];
+        return options.length ? options.map(function (option) {
+          return String(option.score || "—") + (option.probability != null ? " (" + option.probability + "%)" : "");
+        }).join(" / ") : "Not saved";
+      }
+      const predictionText = "HT: " + scores("halfTime") + " · FT: " + scores("fullTime");
       const outcomeText = item.status === "completed"
         ? hitLabel("FT top two", ftHit) + " · " + hitLabel("HT top two", htHit)
         : "Waiting for final result";
       return '<article class="record-row"><div><strong>' + escapeHtml(name) +
         '</strong><span>' + escapeHtml(fixture.league || "League TBC") + ' · ' +
-        escapeHtml(fixture.startingAt || "Kick-off TBC") + '</span></div><div class="record-result ' +
+        escapeHtml(fixture.startingAt || "Kick-off TBC") + '</span><small class="record-prediction">' +
+        escapeHtml(predictionText) + '</small></div><div class="record-result ' +
         (item.status === "completed" ? "is-complete" : "") + '">' + escapeHtml(actualText) +
         '<small class="record-outcome">' + escapeHtml(outcomeText) + '</small></div><span class="record-status ' +
         (item.status === "completed" ? "is-complete" : "") + '">' +
