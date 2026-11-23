@@ -110,6 +110,24 @@ function predictionOptionsMarkup(period, data) {
       return escapeHtml(option.score) + ' · ' + escapeHtml(option.probability) + '%';
     }).join('  |  ') + '</b></div>';
 }
+function predictionOutcomeMarkup(payload) {
+  const tracking = payload && payload.tracking ? payload.tracking : {};
+  if (tracking.recordStatus !== "completed") {
+    return '<section class="prediction-outcome pending"><strong>RESULT TRACKING</strong><p>⏳ Match result pending. JUDY AI will check the final score automatically.</p></section>';
+  }
+  const actual = tracking.actual || {};
+  const evaluation = tracking.evaluation && tracking.evaluation.v2_1 ? tracking.evaluation.v2_1 : {};
+  function period(label, key, actualScore) {
+    const hit = evaluation[key] && evaluation[key].topTwo;
+    const status = hit === true ? "WON" : hit === false ? "LOST" : "RESULT UNAVAILABLE";
+    const scoreText = actualScore ? "Actual score: " + escapeHtml(actualScore) : "Actual score unavailable";
+    return '<div class="outcome-period"><b>' + label + ': ' + status + '</b><span>' + scoreText + '</span></div>';
+  }
+  return '<section class="prediction-outcome completed"><strong>JUDY AI RESULT TRACKING</strong>' +
+    period("HALF-TIME", "halfTime", actual.halfTime) +
+    period("FULL-TIME", "fullTime", actual.fullTime) +
+    '<small>WON means the actual score matched one of JUDY AI’s two ranked options.</small></section>';
+}
 function playerWatchMarkup(data) {
   if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
   const absences = Array.isArray(data.absences) ? data.absences : [];
@@ -198,6 +216,7 @@ async function generatePrediction(button) {
       ' away matches analysed. Not guaranteed.</p>' +
       teamIntelligenceMarkup(payload.teamIntelligence) +
       playerWatchMarkup(payload.playerWatch) +
+      predictionOutcomeMarkup(payload) +
       '<p class="prediction-tracking ' + trackingClass + '">' + escapeHtml(trackingMessage) + '</p>';
     button.textContent = payload.historical ? "View saved prediction" : "Refresh predictions";
   } catch (error) {
