@@ -69,13 +69,17 @@ function leagueGoalAverage(forms, leagueId, period, kickoff, minimumFixtures = 6
   return { average: used ? avg : null, fixtures, used };
 }
 
-function leagueAdjustedExpectedGoals(teamAttack, opponentConceded, leagueAverage) {
+function leagueAdjustedExpectedGoals(teamAttack, opponentConceded, leagueAverage, baselineExpectedGoals) {
   if (!Number.isFinite(teamAttack) || !Number.isFinite(opponentConceded) ||
-      !Number.isFinite(leagueAverage) || leagueAverage <= 0) return null;
+      !Number.isFinite(leagueAverage) || leagueAverage <= 0 ||
+      !Number.isFinite(baselineExpectedGoals)) return null;
   const attackStrength = teamAttack / leagueAverage;
   const opponentDefensiveWeakness = opponentConceded / leagueAverage;
-  return Math.max(0.05, Math.min(4.5,
+  const rawAdjusted = Math.max(0.05, Math.min(4.5,
     leagueAverage * attackStrength * opponentDefensiveWeakness));
+  // Shrink the noisy league adjustment 75% toward the proven V1 baseline.
+  const blended = baselineExpectedGoals + 0.25 * (rawAdjusted - baselineExpectedGoals);
+  return Math.max(0.05, Math.min(4.5, blended));
 }
 
 function reply(data, status = 200) {
@@ -322,10 +326,10 @@ export default {
           const leagueId = target.league_id || (target.league && target.league.id);
           const leagueFt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ft", kickoff);
           const leagueHt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ht", kickoff);
-          const v2FtHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft.scored, aft.conceded, leagueFt.average) : v1FtHome;
-          const v2FtAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average) : v1FtAway;
-          const v2HtHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average) : v1HtHome) : null;
-          const v2HtAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average) : v1HtAway) : null;
+          const v2FtHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft.scored, aft.conceded, leagueFt.average, v1FtHome) : v1FtHome;
+          const v2FtAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average, v1FtAway) : v1FtAway;
+          const v2HtHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average, v1HtHome) : v1HtHome) : null;
+          const v2HtAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average, v1HtAway) : v1HtAway) : null;
           const ftOptions = topScoreOptions(v1FtHome, v1FtAway);
           const htOptions = htReady ? topScoreOptions(v1HtHome, v1HtAway) : null;
           const v2FtOptions = topScoreOptions(v2FtHome, v2FtAway);
@@ -359,7 +363,7 @@ export default {
               halfTimeExact: actualHT ? Boolean(htOptions && htOptions[0] && htOptions[0].score === actualHT) : null,
               halfTimeTopTwo: actualHT ? Boolean(htOptions && htOptions.some(option => option.score === actualHT)) : null
             },
-            comparisonV2: {
+            comparisonV2_1: {
               predicted: { fullTime: v2FtOptions, halfTime: v2HtOptions },
               hits: {
                 fullTimeExact: v2FtOptions[0] && v2FtOptions[0].score === actualFT,
@@ -385,14 +389,14 @@ export default {
         const htCompleted = completed.filter(item => item.actual.halfTime);
         const htHits = htCompleted.filter(item => item.hits.halfTimeExact === true).length;
         const htTopTwoHits = htCompleted.filter(item => item.hits.halfTimeTopTwo === true).length;
-        const v2Hits = key => completed.filter(item => item.comparisonV2 && item.comparisonV2.hits[key] === true).length;
-        const v2HtHits = htCompleted.filter(item => item.comparisonV2 && item.comparisonV2.hits.halfTimeExact === true).length;
-        const v2HtTopTwoHits = htCompleted.filter(item => item.comparisonV2 && item.comparisonV2.hits.halfTimeTopTwo === true).length;
+        const v2Hits = key => completed.filter(item => item.comparisonV2_1 && item.comparisonV2_1.hits[key] === true).length;
+        const v2HtHits = htCompleted.filter(item => item.comparisonV2_1 && item.comparisonV2_1.hits.halfTimeExact === true).length;
+        const v2HtTopTwoHits = htCompleted.filter(item => item.comparisonV2_1 && item.comparisonV2_1.hits.halfTimeTopTwo === true).length;
         return reply({
           app: "JUDY AI",
           success: true,
           mode: "historical_backtest_v1_vs_v2",
-          engineComparison: "V1 baseline versus V2 league-adjusted Poisson",
+          engineComparison: "V1 baseline versus V2.1 conservative league-adjusted Poisson",
           warning: "Experimental paired comparison only. Both models use only matches strictly before each fixture's kickoff. V2 league averages are estimated from recent available fixtures involving the two teams in the same league, not a complete league-wide sample.",
           requestedFixtures: rawIds.length,
           search: searchSummary,
@@ -566,17 +570,17 @@ export default {
         const leagueId = target.league_id || (target.league && target.league.id);
         const leagueFt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ft", kickoff);
         const leagueHt = leagueGoalAverage(homeForm.concat(awayForm), leagueId, "ht", kickoff);
-        const ftHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft.scored, aft.conceded, leagueFt.average) : v1FtHome;
-        const ftAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average) : v1FtAway;
-        const htHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average) : v1HtHome) : null;
-        const htAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average) : v1HtAway) : null;
+        const ftHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft.scored, aft.conceded, leagueFt.average, v1FtHome) : v1FtHome;
+        const ftAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average, v1FtAway) : v1FtAway;
+        const htHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average, v1HtHome) : v1HtHome) : null;
+        const htAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average, v1HtAway) : v1HtAway) : null;
         const sampleSize = { home: homeForm.length, away: awayForm.length };
         const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
         const result = {
           app: "JUDY AI",
           success: true,
           experimental: true,
-          validationStatus: "V2 not yet validated; paired historical comparison available",
+          validationStatus: "V2.1 not yet validated; paired historical comparison available",
           provider: "Sportmonks",
           fixture: {
             id: target.id,
@@ -598,15 +602,15 @@ export default {
           predictions: {
             fullTime: {
               method: leagueFt.used
-                ? "V2 league-adjusted Poisson model using recency-weighted attack and defensive-concession strengths plus a recent same-league scoring baseline"
-                : "V2 fallback to V1 recency-weighted Poisson because fewer than 6 recent same-league fixtures were available",
+                ? "V2.1 conservative league-adjusted Poisson model using recency-weighted attack and defensive-concession strengths plus a recent same-league scoring baseline"
+                : "V2.1 fallback to V1 recency-weighted Poisson because fewer than 6 recent same-league fixtures were available",
               expectedGoals: { home: Number(ftHome.toFixed(2)), away: Number(ftAway.toFixed(2)) },
               options: topScoreOptions(ftHome, ftAway)
             },
             halfTime: htReady ? {
               method: leagueHt.used
-                ? "V2 league-adjusted first-half Poisson model using a recent same-league first-half scoring baseline"
-                : "V2 fallback to V1 first-half Poisson because fewer than 6 same-league first-half fixtures were available",
+                ? "V2.1 conservative league-adjusted first-half Poisson model using a recent same-league first-half scoring baseline"
+                : "V2.1 fallback to V1 first-half Poisson because fewer than 6 same-league first-half fixtures were available",
               expectedGoals: { home: Number(htHome.toFixed(2)), away: Number(htAway.toFixed(2)) },
               options: topScoreOptions(htHome, htAway)
             } : null
@@ -616,7 +620,7 @@ export default {
             halfTime: htReady ? { expectedGoals: { home: Number(v1HtHome.toFixed(2)), away: Number(v1HtAway.toFixed(2)) }, options: topScoreOptions(v1HtHome, v1HtAway) } : null
           },
           modelDiagnostics: {
-            engine: "V2",
+            engine: "V2.1",
             fullTimeLeagueAverageGoalsPerTeam: leagueFt.average === null ? null : Number(leagueFt.average.toFixed(3)),
             fullTimeLeagueFixturesInSample: leagueFt.fixtures,
             fullTimeLeagueAdjustmentUsed: leagueFt.used,
@@ -625,7 +629,7 @@ export default {
             halfTimeLeagueAdjustmentUsed: leagueHt.used,
             leagueBaselineNote: "Recent same-league fixtures found in the two teams' histories; this is a limited proxy, not a complete league-wide average."
           },
-          note: "V2 is experimental and not yet validated. It adjusts expected goals using a recent same-league scoring baseline when at least 6 unique fixtures are available; otherwise it falls back to V1. Probabilities are estimates, not guarantees."
+          note: "V2.1 is experimental and not yet validated. It adjusts expected goals using a recent same-league scoring baseline when at least 6 unique fixtures are available; otherwise it falls back to V1. Probabilities are estimates, not guarantees."
         };
         ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(result), {
           headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
