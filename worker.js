@@ -144,11 +144,17 @@ export default {
         function recentForm(rows, teamId) {
           return (Array.isArray(rows) ? rows : [])
             .filter(f => Number(f.id) !== Number(fixtureId))
-            .map(f => ({
-              ft: goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF"),
-              ht: goalsForAgainst(f, teamId, "1ST_HALF"),
-              date: f.starting_at
-            }))
+            .map(f => {
+              const participant = Array.isArray(f.participants)
+                ? f.participants.find(p => Number(p.id) === Number(teamId))
+                : null;
+              return {
+                ft: goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF"),
+                ht: goalsForAgainst(f, teamId, "1ST_HALF"),
+                date: f.starting_at,
+                venue: participant && participant.meta ? participant.meta.location : null
+              };
+            })
             .filter(f => f.ft)
             .sort((a, b) => String(b.date).localeCompare(String(a.date)))
             .slice(0, 8);
@@ -167,18 +173,37 @@ export default {
           }, 200);
         }
 
-        function periodAverages(form, key) {
-          const rows = form.map(item => item[key]).filter(Boolean);
+        function weightedAverage(values, weights) {
+          const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+          return totalWeight ? values.reduce((sum, value, index) => sum + value * weights[index], 0) / totalWeight : null;
+        }
+
+        function periodAverages(form, key, preferredVenue) {
+          const venueRows = form.filter(item => item.venue === preferredVenue && item[key]);
+          const useVenueSplit = venueRows.length >= 3;
+          const selected = useVenueSplit ? venueRows : form.filter(item => item[key]);
+          const rows = selected.map(item => {
+            const matchDate = new Date(String(item.date || "").replace(" ", "T") + "Z");
+            const ageDays = Number.isNaN(matchDate.getTime())
+              ? 0
+              : Math.max(0, (kickoff.getTime() - matchDate.getTime()) / 86400000);
+            // A 45-day half-life gives recent performances more influence without discarding older matches.
+            const weight = Math.exp(-Math.LN2 * ageDays / 45);
+            return { stats: item[key], weight };
+          });
+          const weights = rows.map(row => row.weight);
           return {
-            scored: average(rows.map(x => x.scored)),
-            conceded: average(rows.map(x => x.conceded)),
-            matches: rows.length
+            scored: weightedAverage(rows.map(row => row.stats.scored), weights),
+            conceded: weightedAverage(rows.map(row => row.stats.conceded), weights),
+            matches: rows.length,
+            venueMatches: venueRows.length,
+            venueSplitUsed: useVenueSplit
           };
         }
-        const hft = periodAverages(homeForm, "ft");
-        const aft = periodAverages(awayForm, "ft");
-        const hht = periodAverages(homeForm, "ht");
-        const aht = periodAverages(awayForm, "ht");
+        const hft = periodAverages(homeForm, "ft", "home");
+        const aft = periodAverages(awayForm, "ft", "away");
+        const hht = periodAverages(homeForm, "ht", "home");
+        const aht = periodAverages(awayForm, "ht", "away");
 
         function expectedGoals(teamAttack, opponentDefence) {
           return Math.max(0.05, Math.min(4.5, (teamAttack + opponentDefence) / 2));
@@ -206,20 +231,27 @@ export default {
             awayTeam: awayTeam.name
           },
           sampleSize,
+          venueAnalysis: {
+            homeTeamHomeMatches: hft.venueMatches,
+            awayTeamAwayMatches: aft.venueMatches,
+            homeVenueSplitUsed: hft.venueSplitUsed,
+            awayVenueSplitUsed: aft.venueSplitUsed,
+            recencyWeighting: "45-day half-life"
+          },
           confidence,
           predictions: {
             fullTime: {
-              method: "Independent Poisson model using recent goals scored and conceded",
+              method: "Recency-weighted Poisson model using recent goals, with home/away venue splits when at least 3 venue-specific matches are available",
               expectedGoals: { home: Number(ftHome.toFixed(2)), away: Number(ftAway.toFixed(2)) },
               options: topScoreOptions(ftHome, ftAway)
             },
             halfTime: htReady ? {
-              method: "Independent Poisson model using recent first-half goals scored and conceded",
+              method: "Recency-weighted Poisson model using recent first-half goals, with home/away venue splits when at least 3 venue-specific matches are available",
               expectedGoals: { home: Number(htHome.toFixed(2)), away: Number(htAway.toFixed(2)) },
               options: topScoreOptions(htHome, htAway)
             } : null
           },
-          note: "Probabilities are experimental model estimates, not guarantees. Validate against completed matches before relying on them."
+          note: "Probabilities are experimental model estimates, not guarantees. This version weights recent matches more heavily and uses venue-specific form when enough data exists. League-wide strength adjustment and historical backtesting are still pending."
         };
         ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(result), {
           headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
