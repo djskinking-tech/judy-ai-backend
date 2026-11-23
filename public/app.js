@@ -604,6 +604,11 @@ if (settingsClose) settingsClose.addEventListener("click", function () { toggleS
         button.classList.toggle("active", selected);
         button.setAttribute("aria-pressed", selected ? "true" : "false");
       });
+      if (appSettings.autoLoadFixtures) loadFixtures();
+    } else if (control === autoLoadFixtures && appSettings.autoLoadFixtures) {
+      loadFixtures();
+    } else if (control === autoRefreshLive && appSettings.autoRefreshLiveScores) {
+      loadLiveScores();
     }
   });
 });
