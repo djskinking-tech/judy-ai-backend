@@ -627,6 +627,42 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/odds") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
+      const fixtureId = url.searchParams.get("fixtureId");
+      if (!fixtureId || !/^\\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
+      try {
+        const rows = await sportmonksRequest(env, "odds/pre-match/fixtures/" + fixtureId, {
+          include: "market;bookmaker"
+        });
+        const odds = (Array.isArray(rows) ? rows : []).map(row => ({
+          fixtureId: row.fixture_id,
+          marketId: row.market_id,
+          market: row.market_description || row.market && (row.market.name || row.market.description) || "",
+          bookmaker: row.bookmaker && (row.bookmaker.name || row.bookmaker.title) || ("Bookmaker " + row.bookmaker_id),
+          bookmakerId: row.bookmaker_id,
+          label: row.label || row.name || "",
+          value: row.value,
+          total: row.total,
+          handicap: row.handicap,
+          updatedAt: row.latest_bookmaker_update || row.updated_at || null,
+          stopped: row.stopped === true
+        })).filter(row => row.value != null && Number.isFinite(Number(row.value)) && Number(row.value) > 1 && !row.stopped);
+        const updatedAt = odds.map(row => row.updatedAt).filter(Boolean).sort().slice(-1)[0] || null;
+        return reply({ app: "JUDY AI", success: true, mode: "pre_match_odds", fixtureId, odds, updatedAt, count: odds.length });
+      } catch (error) {
+        return reply({
+          app: "JUDY AI", success: false,
+          error: error && error.status === 403 ? "Real bookmaker odds are not included in the current Sportmonks subscription or access is denied." :
+            error && error.status === 429 ? "Odds are temporarily rate-limited. Please try again shortly." :
+            "Could not load bookmaker odds.",
+          providerStatus: error && error.status || null,
+          retryAfterSeconds: error && error.retryAfterSeconds || null
+        }, error && error.status === 429 ? 429 : error && error.status === 403 ? 403 : 502);
+      }
+    }
+
     if (url.pathname === "/api/tracking") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.JUDY_PREDICTIONS) return reply({
