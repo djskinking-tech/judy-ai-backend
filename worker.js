@@ -157,6 +157,11 @@ function trackingKey(fixtureId) { return "prediction:" + String(fixtureId); }
 
 async function storePrediction(env, result) {
   if (!env.JUDY_PREDICTIONS) return "storage_not_configured";
+  const key = trackingKey(result.fixture.id);
+  // Freeze the first pre-kickoff prediction for an unbiased performance record.
+  // Refreshing a fixture must never overwrite its original prediction.
+  const existing = await env.JUDY_PREDICTIONS.get(key);
+  if (existing) return "already_saved";
   const record = {
     fixtureId: result.fixture.id,
     fixture: result.fixture,
@@ -169,7 +174,7 @@ async function storePrediction(env, result) {
     evaluation: null,
     lastCheckedAt: null
   };
-  await env.JUDY_PREDICTIONS.put(trackingKey(result.fixture.id), JSON.stringify(record));
+  await env.JUDY_PREDICTIONS.put(key, JSON.stringify(record));
   return "saved";
 }
 
