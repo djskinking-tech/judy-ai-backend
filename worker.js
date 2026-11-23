@@ -1340,6 +1340,63 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/provider-diagnostics") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ success: false, error: "Sportmonks API token is not configured" }, 500);
+      const date = url.searchParams.get("date");
+      if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+        return reply({ success: false, error: "Date must use YYYY-MM-DD format" }, 400);
+      }
+      async function inspectProvider(path, timezone) {
+        const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
+        apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
+        apiUrl.searchParams.set("include", "participants;league;state");
+        apiUrl.searchParams.set("per_page", "50");
+        apiUrl.searchParams.set("page", "1");
+        if (timezone) apiUrl.searchParams.set("timezone", timezone);
+        const upstream = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
+        const raw = await upstream.text();
+        let body;
+        try { body = JSON.parse(raw); }
+        catch { return { httpStatus: upstream.status, readableJson: false }; }
+        const plans = Array.isArray(body.subscription) ? body.subscription.flatMap(item =>
+          Array.isArray(item.plans) ? item.plans.map(plan => plan.plan) : []
+        ) : [];
+        return {
+          httpStatus: upstream.status,
+          responseKeys: Object.keys(body),
+          dataCount: Array.isArray(body.data) ? body.data.length : null,
+          dataType: Array.isArray(body.data) ? "array" : typeof body.data,
+          pagination: body.pagination || null,
+          timezone: body.timezone || null,
+          subscriptionPlans: [...new Set(plans)],
+          rateLimit: body.rate_limit ? {
+            remaining: body.rate_limit.remaining,
+            resetsInSeconds: body.rate_limit.resets_in_seconds
+          } : null,
+          errors: body.errors || null,
+          message: body.message || null
+        };
+      }
+      try {
+        const [dateEndpoint, rangeEndpoint] = await Promise.all([
+          inspectProvider("fixtures/date/" + date, "Africa/Nairobi"),
+          inspectProvider("fixtures/between/" + date + "/" + date, null)
+        ]);
+        return reply({
+          app: "JUDY AI",
+          success: true,
+          provider: "Sportmonks",
+          date,
+          note: "No API token or private credentials are included in this diagnostic.",
+          dateEndpoint,
+          rangeEndpoint
+        });
+      } catch (error) {
+        return reply({ app: "JUDY AI", success: false, error: "Sportmonks diagnostic request failed", details: error.message }, 502);
+      }
+    }
+
     if (url.pathname !== "/api/matches") {
       return reply({ error: "Route not found" }, 404);
     }
