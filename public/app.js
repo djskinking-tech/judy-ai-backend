@@ -140,6 +140,28 @@ function leagueName(match) {
   const league = match.league || match.competition || {};
   return league.name || match.tournament?.name || "Football";
 }
+function fixtureFinalScore(match) {
+  const participants = Array.isArray(match.participants) ? match.participants : [];
+  const home = participants.find(function (team) { return team.meta && team.meta.location === "home"; });
+  const away = participants.find(function (team) { return team.meta && team.meta.location === "away"; });
+  const rows = Array.isArray(match.scores) ? match.scores : [];
+  function goals(team) {
+    if (!team) return null;
+    const candidates = rows.filter(function (row) {
+      return Number(row.participant_id) === Number(team.id) &&
+        ["CURRENT", "2ND_HALF", "FULL_TIME", "FT"].includes(String(row.description || "").toUpperCase().replace(/[\\s-]+/g, "_")) &&
+        row.score && row.score.goals !== null && row.score.goals !== undefined &&
+        Number.isFinite(Number(row.score.goals));
+    });
+    if (!candidates.length) return null;
+    const current = candidates.find(function (row) {
+      return String(row.description || "").toUpperCase() === "CURRENT";
+    });
+    return Number((current || candidates[0]).score.goals);
+  }
+  const homeGoals = goals(home), awayGoals = goals(away);
+  return homeGoals === null || awayGoals === null ? null : homeGoals + " - " + awayGoals;
+}
 function logoMarkup(url) {
   if (!url) return '<span class="team-placeholder">⚽</span>';
   return '<img src="' + escapeHtml(url) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
@@ -160,7 +182,7 @@ function renderMatches(matches) {
       '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span></div>' +
       '<div class="fixture-teams">' +
         '<div class="team">' + logoMarkup(teamLogo(match,"home")) + '<div class="team-name">' + escapeHtml(home) + '</div></div>' +
-        '<div class="versus">VS</div>' +
+        '<div class="versus fixture-score">' + escapeHtml(fixtureFinalScore(match) || "VS") + '</div>' +
         '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
