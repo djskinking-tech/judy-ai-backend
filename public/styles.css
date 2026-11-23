@@ -74,3 +74,21 @@ footer{display:flex;justify-content:space-between;border-top:1px solid #1d2e41;p
 .intelligence-team strong{font-size:10px;color:#e7f2ff}
 .intelligence-team span{font-size:9px;color:#9fb2c7;line-height:1.45}
 .team-intelligence small{display:block;margin-top:8px;color:#8295a9;font-size:8px;line-height:1.5}
+
+
+/* Player Watch */
+.player-watch {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border, #26384b);
+  border-radius: 14px;
+  background: rgba(7, 19, 32, .72);
+  color: var(--text, #e7eef7);
+  font-size: .9rem;
+}
+.player-watch h4 { margin: 0 0 10px; color: var(--accent, #b7f36b); letter-spacing: .06em; }
+.player-watch ul { margin: 6px 0 12px; padding-left: 19px; }
+.player-watch li { margin: 4px 0; color: var(--muted, #9aabba); }
+.player-watch-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
+.player-watch small { display: block; margin-top: 10px; color: var(--muted, #9aabba); line-height: 1.45; }
+@media (max-width: 520px) { .player-watch-teams { grid-template-columns: 1fr; } }
