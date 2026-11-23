@@ -110,6 +110,23 @@ function predictionOptionsMarkup(period, data) {
       return escapeHtml(option.score) + ' · ' + escapeHtml(option.probability) + '%';
     }).join('  |  ') + '</b></div>';
 }
+function teamIntelligenceMarkup(data) {
+  if (!data || !data.home || !data.away) return "";
+  function teamBlock(label, team) {
+    const form = (team.lastFive || []).map(item => item.outcome).join(" · ") || "Unknown";
+    const venueLabel = team.venueSplit === "home" ? "Home" :
+      team.venueSplit === "away" ? "Away" : "All venues";
+    return '<div class="intelligence-team"><strong>' + label + '</strong>' +
+      '<span>Recent form: ' + escapeHtml(form) + '</span>' +
+      '<span>W-D-L: ' + escapeHtml(team.wins) + '-' + escapeHtml(team.draws) + '-' + escapeHtml(team.losses) +
+      ' · ' + escapeHtml(venueLabel) + ' sample: ' + escapeHtml(team.venueMatches) + '</span>' +
+      '<span>Avg goals: ' + escapeHtml(team.averageGoalsFor) + ' scored / ' +
+      escapeHtml(team.averageGoalsAgainst) + ' conceded</span></div>';
+  }
+  return '<section class="team-intelligence"><h4>TEAM INTELLIGENCE · RECENT FORM</h4>' +
+    teamBlock("Home team", data.home) + teamBlock("Away team", data.away) +
+    '<small>Based on completed Sportmonks results. Injuries, suspensions and lineups are not verified here.</small></section>';
+}
 async function generatePrediction(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("prediction-" + fixtureId);
@@ -164,6 +181,7 @@ async function generatePrediction(button) {
       escapeHtml(payload.sampleSize && payload.sampleSize.home != null ? payload.sampleSize.home : "—") +
       ' home / ' + escapeHtml(payload.sampleSize && payload.sampleSize.away != null ? payload.sampleSize.away : "—") +
       ' away matches analysed. Not guaranteed.</p>' +
+      teamIntelligenceMarkup(payload.teamIntelligence) +
       '<p class="prediction-tracking ' + trackingClass + '">' + escapeHtml(trackingMessage) + '</p>';
     button.textContent = payload.historical ? "View saved prediction" : "Refresh predictions";
   } catch (error) {
