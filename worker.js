@@ -233,6 +233,7 @@ async function savedPredictionPayload(env, fixtureId) {
     predictions: record.predictions,
     baselineV1: record.baselineV1 || null,
     modelDiagnostics: record.modelDiagnostics || null,
+    dataQuality: record.dataQuality || null,
     teamIntelligence: record.teamIntelligence || null,
     playerWatch: record.playerWatch || null,
     sampleSize: record.sampleSize || { home: "—", away: "—" },
