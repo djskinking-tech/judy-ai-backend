@@ -352,7 +352,7 @@ async function loadSavedPredictions(matches) {
       panel.innerHTML = predictionOptionsMarkup("Half-time", saved.predictions && saved.predictions.halfTime) +
         predictionOptionsMarkup("Full-time", saved.predictions && saved.predictions.fullTime) +
         '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
-        teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
+        dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
         '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
       button.textContent = "Prediction saved";
       button.disabled = true;
@@ -417,6 +417,22 @@ function playerWatchMarkup(data) {
     '</strong><div class="player-watch-teams"><div><b>Home team</b><ul>' + list(data.lineups && data.lineups.home || []) +
     '</ul></div><div><b>Away team</b><ul>' + list(data.lineups && data.lineups.away || []) +
     '</ul></div></div><small>Source: Sportmonks. Absence data is provider-listed; lineups may be unconfirmed. Missing data is shown as unavailable, not guessed.</small></section>';
+}
+function dataQualityMarkup(data) {
+  if (!data) return '<section class="data-quality"><h4>DATA QUALITY</h4><p>Quality report unavailable for this saved prediction.</p></section>';
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+  const recent = data.recentMatchesUsed || {};
+  const venue = data.venueSpecificMatches || {};
+  const firstHalf = data.firstHalfMatchesAvailable || {};
+  const warningHtml = warnings.length
+    ? '<ul>' + warnings.map(item => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>'
+    : '<p>No major data limitations were flagged by the model.</p>';
+  return '<section class="data-quality"><h4>DATA QUALITY · ' + escapeHtml(data.confidenceLevel || 'Unrated') + ' CONFIDENCE</h4>' +
+    '<div class="quality-stats"><span>Recent matches: ' + escapeHtml(recent.home ?? '—') + ' home / ' + escapeHtml(recent.away ?? '—') + ' away</span>' +
+    '<span>First-half samples: ' + escapeHtml(firstHalf.home ?? '—') + ' home / ' + escapeHtml(firstHalf.away ?? '—') + ' away</span>' +
+    '<span>Home/away venue samples: ' + escapeHtml(venue.homeTeamAtHome ?? '—') + ' / ' + escapeHtml(venue.awayTeamAway ?? '—') + '</span></div>' +
+    '<strong>Data limitations</strong>' + warningHtml +
+    '<small>These checks describe data coverage, not the chance of winning.</small></section>';
 }
 function teamIntelligenceMarkup(data) {
   if (!data || !data.home || !data.away) return "";
@@ -489,6 +505,7 @@ async function generatePrediction(button) {
       escapeHtml(payload.sampleSize && payload.sampleSize.home != null ? payload.sampleSize.home : "—") +
       ' home / ' + escapeHtml(payload.sampleSize && payload.sampleSize.away != null ? payload.sampleSize.away : "—") +
       ' away matches analysed. Not guaranteed.</p>' +
+      dataQualityMarkup(payload.dataQuality) +
       teamIntelligenceMarkup(payload.teamIntelligence) +
       playerWatchMarkup(payload.playerWatch) +
       predictionOutcomeMarkup(payload) +
