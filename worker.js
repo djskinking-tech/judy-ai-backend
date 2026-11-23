@@ -87,7 +87,7 @@ function topScoreOptions(homeLambda, awayLambda) {
 
 function goalsForAgainst(fixture, teamId, period) {
   const scores = Array.isArray(fixture && fixture.scores) ? fixture.scores : [];
-  const normalize = value => String(value || "").toUpperCase().replace(/[\\s-]+/g, "_");
+  const normalize = value => String(value || "").toUpperCase().replace(/[\s-]+/g, "_");
   const wanted = normalize(period);
   const aliases = wanted === "1ST_HALF" ? new Set(["1ST_HALF", "FIRST_HALF", "HALF_TIME", "HT"]) :
     wanted === "CURRENT" ? new Set(["CURRENT", "FULL_TIME", "FT"]) : new Set([wanted]);
