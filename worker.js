@@ -89,7 +89,7 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId");
-      if (!fixtureId || !/^\\d+$/.test(fixtureId)) {
+      if (!fixtureId || !/^\d+$/.test(fixtureId)) {
         return reply({ error: "A valid fixtureId is required" }, 400);
       }
 
