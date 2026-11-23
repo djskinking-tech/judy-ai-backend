@@ -1,7 +1,7 @@
 const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
 const CACHE_TTL = 900;
 
-async function sportmonksRequest(env, path, params = {}) {
+async function sportmonksRequest(env, path, params = {}, options = {}) {
   const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
   for (const [key, value] of Object.entries(params)) apiUrl.searchParams.set(key, value);
   apiUrl.searchParams.sort();
@@ -9,7 +9,7 @@ async function sportmonksRequest(env, path, params = {}) {
   const cache = caches.default;
   const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/api-v1/" +
     encodeURIComponent(path) + "?" + apiUrl.searchParams.toString());
-  const cached = await cache.match(cacheKey);
+  const cached = options.bypassCache ? null : await cache.match(cacheKey);
   if (cached) {
     const body = await cached.json();
     if (body && Object.prototype.hasOwnProperty.call(body, "data")) return body.data;
@@ -53,7 +53,7 @@ async function sportmonksRequest(env, path, params = {}) {
   // Cache them for 30 days; keep fixture detail and date listings fresher.
   const ttl = path.startsWith("fixtures/between/") ? 2592000 :
     (/^fixtures\/\d+$/.test(path) ? 21600 : 300);
-  await cache.put(cacheKey, new Response(JSON.stringify(body), {
+  if (!options.bypassCache) await cache.put(cacheKey, new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + ttl }
   }));
   return body.data;
@@ -153,7 +153,102 @@ function reply(data, status = 200) {
   });
 }
 
+function trackingKey(fixtureId) { return "prediction:" + String(fixtureId); }
+
+async function storePrediction(env, result) {
+  if (!env.JUDY_PREDICTIONS) return "storage_not_configured";
+  const record = {
+    fixtureId: result.fixture.id,
+    fixture: result.fixture,
+    capturedAt: new Date().toISOString(),
+    status: "pending",
+    predictions: result.predictions,
+    baselineV1: result.baselineV1,
+    modelDiagnostics: result.modelDiagnostics,
+    actual: null,
+    evaluation: null,
+    lastCheckedAt: null
+  };
+  await env.JUDY_PREDICTIONS.put(trackingKey(result.fixture.id), JSON.stringify(record));
+  return "saved";
+}
+
+function isFixtureFinished(fixture) {
+  const state = fixture && fixture.state ? fixture.state : {};
+  const values = [state.state, state.name, state.short_name, state.developer_name]
+    .filter(Boolean).map(value => String(value).toLowerCase());
+  return values.some(value =>
+    value === "ft" || value === "aet" || value === "ft_pen" ||
+    value.includes("full time") || value.includes("finished") ||
+    value.includes("after extra time") || value.includes("after penalties")
+  );
+}
+
+function scoreHits(options, actual) {
+  if (!Array.isArray(options) || !actual) return { exact: null, topTwo: null };
+  return {
+    exact: Boolean(options[0] && options[0].score === actual),
+    topTwo: options.some(option => option.score === actual)
+  };
+}
+
+function evaluateTrackedRecord(record, actualFT, actualHT) {
+  const v1FT = scoreHits(record.baselineV1 && record.baselineV1.fullTime && record.baselineV1.fullTime.options, actualFT);
+  const v2FT = scoreHits(record.predictions && record.predictions.fullTime && record.predictions.fullTime.options, actualFT);
+  const v1HT = scoreHits(record.baselineV1 && record.baselineV1.halfTime && record.baselineV1.halfTime.options, actualHT);
+  const v2HT = scoreHits(record.predictions && record.predictions.halfTime && record.predictions.halfTime.options, actualHT);
+  return {
+    v1: { fullTime: v1FT, halfTime: v1HT },
+    v2_1: { fullTime: v2FT, halfTime: v2HT }
+  };
+}
+
 export default {
+  async scheduled(controller, env, ctx) {
+    if (!env.SPORTMONKS_API_TOKEN || !env.JUDY_PREDICTIONS) return;
+    const pending = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 20 });
+    for (const key of pending.keys || []) {
+      try {
+        const raw = await env.JUDY_PREDICTIONS.get(key.name);
+        if (!raw) continue;
+        const record = JSON.parse(raw);
+        if (record.status === "completed") continue;
+        const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
+          include: "participants;scores;state;league"
+        }, { bypassCache: true });
+        record.lastCheckedAt = new Date().toISOString();
+        if (!isFixtureFinished(fixture)) {
+          await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+          continue;
+        }
+        const participants = Array.isArray(fixture.participants) ? fixture.participants : [];
+        const home = participants.find(p => p.meta && p.meta.location === "home");
+        const away = participants.find(p => p.meta && p.meta.location === "away");
+        if (!home || !away) {
+          await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+          continue;
+        }
+        const homeFT = goalsForAgainst(fixture, home.id, "CURRENT") || goalsForAgainst(fixture, home.id, "2ND_HALF");
+        const awayFT = goalsForAgainst(fixture, away.id, "CURRENT") || goalsForAgainst(fixture, away.id, "2ND_HALF");
+        if (!homeFT || !awayFT) {
+          await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+          continue;
+        }
+        const homeHT = goalsForAgainst(fixture, home.id, "1ST_HALF");
+        const awayHT = goalsForAgainst(fixture, away.id, "1ST_HALF");
+        const actualFT = homeFT.scored + "-" + awayFT.scored;
+        const actualHT = homeHT && awayHT ? homeHT.scored + "-" + awayHT.scored : null;
+        record.status = "completed";
+        record.completedAt = new Date().toISOString();
+        record.actual = { fullTime: actualFT, halfTime: actualHT };
+        record.evaluation = evaluateTrackedRecord(record, actualFT, actualHT);
+        await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+      } catch (error) {
+        if (error && error.status === 429) break;
+        // Keep this fixture pending; the next hourly run will retry it.
+      }
+    }
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
@@ -176,8 +271,59 @@ export default {
       return reply({
         app: "JUDY AI",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
+        predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
       });
+    }
+
+    if (url.pathname === "/api/tracking") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.JUDY_PREDICTIONS) return reply({
+        app: "JUDY AI", success: false, error: "Prediction storage is not configured",
+        requiredBinding: "JUDY_PREDICTIONS"
+      }, 503);
+      try {
+        const records = [];
+        let cursor;
+        do {
+          const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
+          for (const key of page.keys || []) {
+            const raw = await env.JUDY_PREDICTIONS.get(key.name);
+            if (raw) records.push(JSON.parse(raw));
+          }
+          cursor = page.list_complete ? undefined : page.cursor;
+        } while (cursor);
+        records.sort((a, b) => String(b.capturedAt).localeCompare(String(a.capturedAt)));
+        const completed = records.filter(record => record.status === "completed");
+        const metric = (model, period, hitType) => {
+          const rows = completed.filter(record => record.evaluation && record.evaluation[model] &&
+            record.evaluation[model][period] && record.evaluation[model][period][hitType] !== null);
+          const hits = rows.filter(record => record.evaluation[model][period][hitType] === true).length;
+          return { hits, total: rows.length, accuracyPercent: rows.length ? Number((hits / rows.length * 100).toFixed(2)) : null };
+        };
+        return reply({
+          app: "JUDY AI", success: true, mode: "prediction_tracking",
+          totalPredictions: records.length, pendingPredictions: records.length - completed.length,
+          completedPredictions: completed.length,
+          metrics: {
+            v1: {
+              fullTimeExact: metric("v1", "fullTime", "exact"),
+              fullTimeTopTwo: metric("v1", "fullTime", "topTwo"),
+              halfTimeExact: metric("v1", "halfTime", "exact"),
+              halfTimeTopTwo: metric("v1", "halfTime", "topTwo")
+            },
+            v2_1: {
+              fullTimeExact: metric("v2_1", "fullTime", "exact"),
+              fullTimeTopTwo: metric("v2_1", "fullTime", "topTwo"),
+              halfTimeExact: metric("v2_1", "halfTime", "exact"),
+              halfTimeTopTwo: metric("v2_1", "halfTime", "topTwo")
+            }
+          },
+          records
+        });
+      } catch (error) {
+        return reply({ app: "JUDY AI", success: false, error: "Could not read prediction tracking data", details: error.message }, 500);
+      }
     }
 
     if (url.pathname === "/api/backtest") {
@@ -492,10 +638,17 @@ export default {
       const cache = caches.default;
       const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v3/" + fixtureId);
       const cached = await cache.match(cacheKey);
-      if (cached) return new Response(cached.body, {
-        status: cached.status,
-        headers: { ...Object.fromEntries(cached.headers), "Access-Control-Allow-Origin": WEBSITE_ORIGIN }
-      });
+      if (cached) {
+        const cachedResult = await cached.clone().json();
+        let trackingSaveStatus = "storage_not_configured";
+        if (env.JUDY_PREDICTIONS && cachedResult && cachedResult.fixture &&
+            new Date(String(cachedResult.fixture.startingAt).replace(" ", "T") + "Z").getTime() > Date.now()) {
+          try { trackingSaveStatus = await storePrediction(env, cachedResult); }
+          catch { trackingSaveStatus = "save_failed"; }
+        }
+        cachedResult.tracking = { saveStatus: trackingSaveStatus };
+        return reply(cachedResult);
+      }
 
       async function sportmonks(path, params = {}) {
         return sportmonksRequest(env, path, params);
@@ -512,6 +665,10 @@ export default {
 
         const kickoff = new Date(String(target.starting_at).replace(" ", "T") + "Z");
         if (Number.isNaN(kickoff.getTime())) return reply({ error: "Fixture kick-off date is invalid." }, 422);
+        if (kickoff.getTime() <= Date.now()) return reply({
+          app: "JUDY AI", success: false, error: "Predictions are only generated and stored before kick-off.",
+          fixtureId: target.id, startingAt: target.starting_at
+        }, 409);
         const endDate = target.starting_at.slice(0, 10);
         const start = new Date(kickoff.getTime() - 180 * 86400000).toISOString().slice(0, 10);
 
@@ -664,6 +821,12 @@ export default {
           },
           note: "V2.1 is experimental and not yet validated. It adjusts expected goals using a recent same-league scoring baseline when at least 6 unique fixtures are available; otherwise it falls back to V1. Probabilities are estimates, not guarantees."
         };
+        let trackingSaveStatus = "storage_not_configured";
+        if (env.JUDY_PREDICTIONS) {
+          try { trackingSaveStatus = await storePrediction(env, result); }
+          catch { trackingSaveStatus = "save_failed"; }
+        }
+        result.tracking = { saveStatus: trackingSaveStatus };
         ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(result), {
           headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
         })));
