@@ -6,6 +6,74 @@ const countBox = document.getElementById("match-count");
 const caption = document.getElementById("results-caption");
 const tomorrowButton = document.getElementById("tomorrow-matches");
 
+const liveScoreList = document.getElementById("live-score-list");
+const liveScoreUpdated = document.getElementById("live-score-updated");
+const refreshLiveScoresButton = document.getElementById("refresh-live-scores");
+let liveScoreTimer = null;
+
+function liveTeamName(match, side) {
+  const participants = Array.isArray(match.participants) ? match.participants : [];
+  const team = participants.find(function (item) { return item.meta && item.meta.location === side; });
+  return team && (team.name || team.short_code) || (match.name || "Match").split(" vs ")[side === "home" ? 0 : 1] || side;
+}
+function liveScoreFor(match) {
+  const rows = Array.isArray(match.scores) ? match.scores : [];
+  const current = rows.filter(function (row) {
+    return ["CURRENT", "1ST_HALF", "FIRST_HALF", "HALF_TIME", "HT"].includes(String(row.description || "").toUpperCase().replace(/[\\s-]+/g, "_"));
+  });
+  const participants = Array.isArray(match.participants) ? match.participants : [];
+  const home = participants.find(function (item) { return item.meta && item.meta.location === "home"; });
+  const away = participants.find(function (item) { return item.meta && item.meta.location === "away"; });
+  if (!home || !away) return "—";
+  function goals(team) {
+    const row = current.find(function (item) { return Number(item.participant_id) === Number(team.id); });
+    return row && row.score && row.score.goals != null ? Number(row.score.goals) : null;
+  }
+  const h = goals(home), a = goals(away);
+  return h == null || a == null ? "—" : h + " - " + a;
+}
+function liveMinute(match) {
+  const events = Array.isArray(match.events) ? match.events : [];
+  const eventMinutes = events.map(function (event) { return Number(event.minute || 0); }).filter(Number.isFinite);
+  const minute = match.time && (match.time.minute || match.time.extra_minute) || match.minute ||
+    (eventMinutes.length ? Math.max.apply(null, eventMinutes) : null);
+  return minute ? String(minute) + "'" : "";
+}
+function renderLiveScores(matches) {
+  if (!matches.length) {
+    liveScoreList.innerHTML = '<div class="live-empty">No live matches right now. JUDY AI will keep checking automatically.</div>';
+    return;
+  }
+  liveScoreList.innerHTML = matches.map(function (match) {
+    const state = match.state || {};
+    const status = state.short_name || state.state || state.name || "LIVE";
+    const score = liveScoreFor(match);
+    const minute = liveMinute(match);
+    const isFinished = ["FT","AET","FT_PEN"].includes(String(status).toUpperCase());
+    return '<article class="live-score-card">' +
+      '<div class="live-score-status"><span class="' + (isFinished ? "live-dot finished" : "live-dot") + '"></span>' +
+      escapeHtml(String(status).toUpperCase()) + (minute && !isFinished ? ' · ' + escapeHtml(minute) : '') + '</div>' +
+      '<div class="live-score-teams"><span>' + escapeHtml(liveTeamName(match,"home")) + '</span><strong>' + escapeHtml(score) + '</strong><span>' +
+      escapeHtml(liveTeamName(match,"away")) + '</span></div>' +
+      '<div class="live-score-league">' + escapeHtml(match.league && match.league.name || "Football") + '</div>' +
+      '</article>';
+  }).join("");
+}
+async function loadLiveScores() {
+  if (!liveScoreList) return;
+  try {
+    const response = await fetch("/api/live-scores", { headers: {"Accept":"application/json"} });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || "Live scores unavailable.");
+    renderLiveScores(Array.isArray(payload.matches) ? payload.matches : []);
+    liveScoreUpdated.textContent = "Updated " + new Intl.DateTimeFormat("en-KE", {
+      timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", second: "2-digit"
+    }).format(new Date(payload.updatedAt || Date.now())) + " EAT · refreshes every 30 seconds";
+  } catch (error) {
+    liveScoreList.innerHTML = '<div class="live-empty">' + escapeHtml(error.message || "Live scores temporarily unavailable.") + '</div>';
+    liveScoreUpdated.textContent = "Live score connection unavailable";
+  }
+}
 function nairobiToday() {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit"
@@ -294,6 +362,12 @@ tomorrowButton.addEventListener("click", function () {
   dateInput.value = nairobiDateOffset(1);
   loadFixtures();
 });
+if (refreshLiveScoresButton) refreshLiveScoresButton.addEventListener("click", loadLiveScores);
+loadLiveScores();
+liveScoreTimer = setInterval(function () {
+  if (!document.hidden) loadLiveScores();
+}, 30000);
+
 fixturesBox.addEventListener("click", function (event) {
   const button = event.target.closest(".prediction-button");
   if (button) generatePrediction(button);
