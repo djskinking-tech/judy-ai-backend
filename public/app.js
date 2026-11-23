@@ -19,7 +19,7 @@ function liveTeamName(match, side) {
 function liveScoreFor(match) {
   const rows = Array.isArray(match.scores) ? match.scores : [];
   const current = rows.filter(function (row) {
-    return ["CURRENT", "1ST_HALF", "FIRST_HALF", "HALF_TIME", "HT"].includes(String(row.description || "").toUpperCase().replace(/[\\s-]+/g, "_"));
+    return ["CURRENT", "1ST_HALF", "FIRST_HALF", "HALF_TIME", "HT"].includes(String(row.description || "").toUpperCase().replace(/[\s-]+/g, "_"));
   });
   const participants = Array.isArray(match.participants) ? match.participants : [];
   const home = participants.find(function (item) { return item.meta && item.meta.location === "home"; });
