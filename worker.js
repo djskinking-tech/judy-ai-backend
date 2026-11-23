@@ -982,7 +982,7 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.JUDY_PREDICTIONS) return reply({ app: "JUDY AI", success: true, predictions: {}, message: "Prediction storage is not configured." });
       const rawIds = (url.searchParams.get("fixtureIds") || "").split(",").filter(Boolean);
-      const fixtureIds = [...new Set(rawIds)].filter(id => /^\\d+$/.test(id)).slice(0, 80);
+      const fixtureIds = [...new Set(rawIds)].filter(id => /^\d+$/.test(id)).slice(0, 80);
       if (!fixtureIds.length) return reply({ error: "Provide one or more valid fixtureIds." }, 400);
       const entries = await Promise.all(fixtureIds.map(async id => [id, await savedPredictionPayload(env, id)]));
       const predictions = {};
