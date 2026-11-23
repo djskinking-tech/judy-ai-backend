@@ -1287,7 +1287,7 @@ export default {
     }
 
     const cache = caches.default;
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v2/" + date);
     const cached = await cache.match(cacheKey);
 
     if (cached) {
@@ -1302,7 +1302,7 @@ export default {
 
     const apiUrl = new URL("https://api.sportmonks.com/v3/football/fixtures/date/" + date);
     apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
-    apiUrl.searchParams.set("include", "participants;league;state;venue");
+    apiUrl.searchParams.set("include", "participants;league;scores;state;venue");
     apiUrl.searchParams.set("per_page", "50");
 
     try {
