@@ -631,7 +631,7 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId");
-      if (!fixtureId || !/^\\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
+      if (!fixtureId || !/^\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
       try {
         const rows = await sportmonksRequest(env, "odds/pre-match/fixtures/" + fixtureId, {
           include: "market;bookmaker"
