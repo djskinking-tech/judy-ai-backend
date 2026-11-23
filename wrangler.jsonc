@@ -4,6 +4,12 @@
   "main": "worker.js",
   "compatibility_date": "2026-11-23",
   "triggers": { "crons": ["0 * * * *"] },
+  "kv_namespaces": [
+    {
+      "binding": "JUDY_PREDICTIONS",
+      "id": "6b6812a7eec142ab88553b6ca87dda23"
+    }
+  ],
   "assets": {
     "directory": "./public",
     "not_found_handling": "single-page-application",
