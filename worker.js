@@ -94,7 +94,7 @@ export default {
       }
 
       const cache = caches.default;
-      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/" + fixtureId);
+      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v2/" + fixtureId);
       const cached = await cache.match(cacheKey);
       if (cached) return new Response(cached.body, {
         status: cached.status,
