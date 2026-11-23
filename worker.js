@@ -170,7 +170,10 @@ export default {
             return hasFullTimeScore && Number.isFinite(kickoffTime) &&
               kickoffTime <= end.getTime() &&
               !["not started", "ns", "live", "in play", "1st half", "2nd half", "half-time"].includes(stateName);
-          });
+          }).sort((a, b) =>
+            new Date(String(b.starting_at).replace(" ", "T") + "Z").getTime() -
+            new Date(String(a.starting_at).replace(" ", "T") + "Z").getTime()
+          );
           rawIds = finished.slice(0, limit).map(f => String(f.id));
           searchSummary = {
             mode: "automatic_date_range",
