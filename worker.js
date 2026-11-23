@@ -206,16 +206,23 @@ function evaluateTrackedRecord(record, actualFT, actualHT) {
 export default {
   async scheduled(controller, env, ctx) {
     if (!env.SPORTMONKS_API_TOKEN || !env.JUDY_PREDICTIONS) return;
-    const pending = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 20 });
-    for (const key of pending.keys || []) {
-      try {
-        const raw = await env.JUDY_PREDICTIONS.get(key.name);
-        if (!raw) continue;
-        const record = JSON.parse(raw);
-        if (record.status === "completed") continue;
-        const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
-          include: "participants;scores;state;league"
-        }, { bypassCache: true });
+    let cursor;
+    let checkedThisRun = 0;
+    do {
+      const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
+      for (const key of page.keys || []) {
+        if (checkedThisRun >= 20) return;
+        try {
+          const raw = await env.JUDY_PREDICTIONS.get(key.name);
+          if (!raw) continue;
+          const record = JSON.parse(raw);
+          if (record.status === "completed") continue;
+          const kickoffTime = new Date(String(record.fixture && record.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
+          if (!Number.isFinite(kickoffTime) || kickoffTime > Date.now()) continue;
+          checkedThisRun++;
+          const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
+            include: "participants;scores;state;league"
+          }, { bypassCache: true });
         record.lastCheckedAt = new Date().toISOString();
         if (!isFixtureFinished(fixture)) {
           await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
@@ -228,8 +235,8 @@ export default {
           await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
           continue;
         }
-        const homeFT = goalsForAgainst(fixture, home.id, "CURRENT") || goalsForAgainst(fixture, home.id, "2ND_HALF");
-        const awayFT = goalsForAgainst(fixture, away.id, "CURRENT") || goalsForAgainst(fixture, away.id, "2ND_HALF");
+        const homeFT = goalsForAgainst(fixture, home.id, "CURRENT");
+        const awayFT = goalsForAgainst(fixture, away.id, "CURRENT");
         if (!homeFT || !awayFT) {
           await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
           continue;
@@ -243,11 +250,13 @@ export default {
         record.actual = { fullTime: actualFT, halfTime: actualHT };
         record.evaluation = evaluateTrackedRecord(record, actualFT, actualHT);
         await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
-      } catch (error) {
-        if (error && error.status === 429) break;
-        // Keep this fixture pending; the next hourly run will retry it.
+        } catch (error) {
+          if (error && error.status === 429) return;
+          // Keep this fixture pending; the next hourly run will retry it.
+        }
       }
-    }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -640,6 +649,11 @@ export default {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const cachedResult = await cached.clone().json();
+        const cachedKickoff = new Date(String(cachedResult.fixture && cachedResult.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
+        if (Number.isFinite(cachedKickoff) && cachedKickoff <= Date.now()) return reply({
+          app: "JUDY AI", success: false, error: "Predictions are only available before kick-off.",
+          fixtureId, startingAt: cachedResult.fixture.startingAt
+        }, 409);
         let trackingSaveStatus = "storage_not_configured";
         if (env.JUDY_PREDICTIONS && cachedResult && cachedResult.fixture &&
             new Date(String(cachedResult.fixture.startingAt).replace(" ", "T") + "Z").getTime() > Date.now()) {
