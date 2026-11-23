@@ -90,10 +90,50 @@ function renderMatches(matches) {
         '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
-      '<div class="prediction-label"><span>Half-time score</span><b>ENGINE IN DEVELOPMENT</b></div>' +
-      '<div class="prediction-label"><span>Full-time score</span><b>ENGINE IN DEVELOPMENT</b></div>' +
+      '<div class="prediction-actions"><button class="prediction-button" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">Generate AI predictions</button></div>' +
+      '<div class="prediction-results" id="prediction-' + escapeHtml(match.id || match.fixture_id || "") + '"><div class="prediction-label"><span>Half-time score</span><b>Not generated</b></div><div class="prediction-label"><span>Full-time score</span><b>Not generated</b></div></div>' +
     '</article>';
   }).join("");
+}
+function predictionOptionsMarkup(period, data) {
+  if (!data || !Array.isArray(data.options) || !data.options.length) {
+    return '<div class="prediction-label"><span>' + period + '</span><b>Insufficient data</b></div>';
+  }
+  return '<div class="prediction-label"><span>' + period + '</span><b>' +
+    data.options.map(function (option) {
+      return escapeHtml(option.score) + ' · ' + escapeHtml(option.probability) + '%';
+    }).join('  |  ') + '</b></div>';
+}
+async function generatePrediction(button) {
+  const fixtureId = button.dataset.fixtureId;
+  const panel = document.getElementById("prediction-" + fixtureId);
+  if (!fixtureId || !panel) {
+    button.textContent = "Prediction unavailable";
+    button.disabled = true;
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Analysing recent form…";
+  panel.innerHTML = '<div class="prediction-loading">JUDY AI is analysing recent team results…</div>';
+  try {
+    const response = await fetch("/api/predictions?fixtureId=" + encodeURIComponent(fixtureId), {
+      headers: {"Accept":"application/json"}
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) throw new Error(payload.error || "Prediction request failed.");
+    if (!payload.success) throw new Error(payload.message || "Not enough historical data for a prediction.");
+    panel.innerHTML = predictionOptionsMarkup("Half-time", payload.predictions.halfTime) +
+      predictionOptionsMarkup("Full-time", payload.predictions.fullTime) +
+      '<p class="prediction-disclaimer">Experimental estimates · ' + escapeHtml(payload.confidence) +
+      ' confidence · ' + escapeHtml(payload.sampleSize.home) + ' home / ' + escapeHtml(payload.sampleSize.away) +
+      ' away matches analysed. Not guaranteed.</p>';
+    button.textContent = "Refresh predictions";
+  } catch (error) {
+    panel.innerHTML = '<div class="prediction-error">' + escapeHtml(error.message || "Could not generate predictions.") + '</div>';
+    button.textContent = "Try again";
+  } finally {
+    button.disabled = false;
+  }
 }
 function showMessage(title, detail, type) {
   messageBox.className = "message" + (type ? " " + type : "");
@@ -147,3 +187,7 @@ async function loadFixtures() {
 dateInput.value = nairobiToday();
 document.getElementById("year").textContent = new Date().getFullYear();
 loadButton.addEventListener("click", loadFixtures);
+fixturesBox.addEventListener("click", function (event) {
+  const button = event.target.closest(".prediction-button");
+  if (button) generatePrediction(button);
+});
