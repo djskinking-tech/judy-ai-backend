@@ -139,3 +139,11 @@ footer{display:flex;justify-content:space-between;border-top:1px solid #1d2e41;p
  .control-panel .secondary-button,.control-panel .primary-button{width:100%;margin:0}
  .results-head{margin-top:22px}
 }
+
+
+/* Calendar quick date choices */
+.quick-date-options{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.date-option{border:1px solid #344b61;border-radius:9px;padding:11px 14px;background:#142438;color:#c5d2df;font:inherit;font-size:11px;font-weight:850;cursor:pointer;white-space:nowrap}
+.date-option.active{border-color:var(--green);background:#1a3022;color:var(--green);box-shadow:inset 0 0 0 1px #b9f36630}
+.date-option:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media(max-width:680px){.quick-date-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-column:1/-1}.date-option{padding:11px 5px;text-align:center}}
