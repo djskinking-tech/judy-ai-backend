@@ -252,6 +252,7 @@ export default {
         const rate = hits => completed.length ? Number((hits / completed.length * 100).toFixed(2)) : null;
         const htCompleted = completed.filter(item => item.actual.halfTime);
         const htHits = htCompleted.filter(item => item.hits.halfTimeExact === true).length;
+        const htTopTwoHits = htCompleted.filter(item => item.hits.halfTimeTopTwo === true).length;
         return reply({
           app: "JUDY AI",
           success: true,
@@ -267,7 +268,9 @@ export default {
             fullTimeTopTwoAccuracyPercent: rate(countHits("fullTimeTopTwo")),
             halfTimeFixturesWithResults: htCompleted.length,
             halfTimeExactScoreHits: htHits,
-            halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((htHits / htCompleted.length * 100).toFixed(2)) : null
+            halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((htHits / htCompleted.length * 100).toFixed(2)) : null,
+            halfTimeTopTwoHits: htTopTwoHits,
+            halfTimeTopTwoAccuracyPercent: htCompleted.length ? Number((htTopTwoHits / htCompleted.length * 100).toFixed(2)) : null
           },
           results: completed
         });
