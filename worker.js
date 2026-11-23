@@ -192,6 +192,7 @@ async function storePrediction(env, result) {
     baselineV1: result.baselineV1,
     modelDiagnostics: result.modelDiagnostics,
     teamIntelligence: result.teamIntelligence || null,
+    playerWatch: result.playerWatch || null,
     sampleSize: result.sampleSize || null,
     confidence: result.confidence || null,
     experimental: result.experimental === true,
@@ -220,6 +221,7 @@ async function savedPredictionPayload(env, fixtureId) {
     baselineV1: record.baselineV1 || null,
     modelDiagnostics: record.modelDiagnostics || null,
     teamIntelligence: record.teamIntelligence || null,
+    playerWatch: record.playerWatch || null,
     sampleSize: record.sampleSize || { home: "—", away: "—" },
     confidence: record.confidence || "Recorded pre-kickoff",
     experimental: record.experimental === true,
@@ -916,7 +918,7 @@ export default {
       }
 
       try {
-        const target = await sportmonks("fixtures/" + fixtureId, { include: "participants;league" });
+        const target = await sportmonks("fixtures/" + fixtureId, { include: "participants;league;sidelined.player;sidelined.type;lineups.player;lineups.type;lineups.position" });
         if (!target || !Array.isArray(target.participants)) {
           return reply({ error: "Fixture or participant data was not found." }, 404);
         }
@@ -1068,6 +1070,19 @@ export default {
             "Venue splits use all-venue data when fewer than two matching home/away samples are available."
           ]
         };
+        const sidelinedRows = Array.isArray(target.sidelined) ? target.sidelined : [];
+        const todayNairobi = nairobiDateOffset(0);
+        const activeAbsences = sidelinedRows.filter(row => row && row.completed === false && (!row.end_date || String(row.end_date).slice(0, 10) >= todayNairobi));
+        const lineupRows = Array.isArray(target.lineups) ? target.lineups : [];
+        const playerLabel = row => (row.player && (row.player.display_name || row.player.common_name || row.player.name)) || row.player_name || "Name unavailable";
+        const confirmed = !!(target.metadata && target.metadata.lineup_confirmed === true);
+        const playerWatch = {
+          status: activeAbsences.length || lineupRows.length ? "available" : "limited",
+          absences: activeAbsences.map(row => ({ player: playerLabel(row), teamId: row.team_id || null, reason: row.type && (row.type.name || row.type.code) || "Reason not supplied", startDate: row.start_date || null, endDate: row.end_date || null, sourceStatus: "Sportmonks sidelined record" })),
+          lineups: { status: lineupRows.length ? (confirmed ? "confirmed" : "predicted_or_unconfirmed") : "not_available", label: lineupRows.length ? (confirmed ? "Confirmed lineups" : "Expected / unconfirmed lineup data") : "Not available yet", home: lineupRows.filter(row => Number(row.team_id) === Number(homeTeam.id) && Number(row.type_id) === 11).map(row => ({ name: playerLabel(row), position: row.position && row.position.name || "Position unavailable" })), away: lineupRows.filter(row => Number(row.team_id) === Number(awayTeam.id) && Number(row.type_id) === 11).map(row => ({ name: playerLabel(row), position: row.position && row.position.name || "Position unavailable" })) },
+          source: "Sportmonks fixture sidelined and lineup data",
+          note: "Only provider-listed absences and lineup entries are shown. Missing information is not inferred."
+        };
         const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
         const result = {
           app: "JUDY AI",
@@ -1085,6 +1100,7 @@ export default {
           },
           sampleSize,
           teamIntelligence,
+          playerWatch,
           venueAnalysis: {
             homeTeamHomeMatches: hft.venueMatches,
             awayTeamAwayMatches: aft.venueMatches,
