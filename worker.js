@@ -285,13 +285,18 @@ export default {
         const endIndex = Math.min(batch.nextIndex + 3, batch.fixtureIds.length);
         for (let index = batch.nextIndex; index < endIndex; index++) {
           const fixtureId = batch.fixtureIds[index];
+          let retryCurrent = false;
           try {
             const response = await this.fetch(new Request(
               WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
               { method: "GET" }
             ), env, ctx);
             const result = await response.json();
-            if (response.ok && result && result.success === true && result.predictions) {
+            if (response.status === 429 || (result && result.providerStatus === 429)) {
+              retryCurrent = true;
+              run.rateLimited = true;
+              run.errors.push("Auto prediction batch paused by Sportmonks rate limiting; it will retry next scheduled run.");
+            } else if (response.ok && result && result.success === true && result.predictions) {
               batch.generated++;
               run.autoPredictionGenerated++;
             } else if (result && result.status === "insufficient_history") {
@@ -306,11 +311,16 @@ export default {
                 String(result && (result.error || result.message) || "Prediction unavailable").slice(0, 180));
             }
           } catch (error) {
-            batch.failed++;
-            run.autoPredictionFailed++;
-            run.errors.push("Auto prediction " + fixtureId + ": " +
-              String(error && error.message || error).slice(0, 180));
+            retryCurrent = error && error.status === 429;
+            if (retryCurrent) run.rateLimited = true;
+            else {
+              batch.failed++;
+              run.autoPredictionFailed++;
+              run.errors.push("Auto prediction " + fixtureId + ": " +
+                String(error && error.message || error).slice(0, 180));
+            }
           }
+          if (retryCurrent) break;
           batch.nextIndex = index + 1;
         }
         if (batch.nextIndex >= batch.fixtureIds.length) batch.status = "completed";
