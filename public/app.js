@@ -121,7 +121,21 @@ async function generatePrediction(button) {
     });
     const payload = await response.json();
     if (!response.ok || payload.error) throw new Error(payload.error || "Prediction request failed.");
-    if (!payload.success) throw new Error(payload.message || "Not enough historical data for a prediction.");
+    if (!payload.success) {
+      if (payload.status === "insufficient_history") {
+        const homeCount = Number(payload.sampleSize && payload.sampleSize.home || 0);
+        const awayCount = Number(payload.sampleSize && payload.sampleSize.away || 0);
+        const minimum = Number(payload.minimumRequired || 3);
+        panel.innerHTML = '<div class="prediction-error">' +
+          escapeHtml(payload.message || "Not enough recent match data to make a responsible prediction.") +
+          '<br>Home team: ' + escapeHtml(homeCount) + '/' + escapeHtml(minimum) +
+          ' matches · Away team: ' + escapeHtml(awayCount) + '/' + escapeHtml(minimum) +
+          ' matches required.</div>';
+        button.textContent = "Try again";
+        return;
+      }
+      throw new Error(payload.message || "Not enough historical data for a prediction.");
+    }
     const saveStatus = payload.tracking && payload.tracking.saveStatus
       ? payload.tracking.saveStatus : "save_status_missing";
     const trackingMessage = saveStatus === "saved"
