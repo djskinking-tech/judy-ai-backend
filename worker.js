@@ -631,33 +631,68 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId");
-      if (!fixtureId || !/^\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
+      if (!fixtureId || !/^\\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
       try {
-        const rows = await sportmonksRequest(env, "odds/pre-match/fixtures/" + fixtureId, {
+        // Sportmonks documents both the dedicated pre-match odds endpoint and
+        // odds as a fixture include. Try the dedicated feed first, then fallback.
+        let source = "pre_match_odds_endpoint";
+        let rows = await sportmonksRequest(env, "odds/pre-match/fixtures/" + fixtureId, {
           include: "market;bookmaker"
         });
-        const odds = (Array.isArray(rows) ? rows : []).map(row => ({
-          fixtureId: row.fixture_id,
-          marketId: row.market_id,
-          market: row.market_description || row.market && (row.market.name || row.market.description) || "",
-          bookmaker: row.bookmaker && (row.bookmaker.name || row.bookmaker.title) || ("Bookmaker " + row.bookmaker_id),
-          bookmakerId: row.bookmaker_id,
-          label: row.label || row.name || "",
-          value: row.value,
-          total: row.total,
-          handicap: row.handicap,
-          updatedAt: row.latest_bookmaker_update || row.updated_at || null,
-          stopped: row.stopped === true
-        })).filter(row => row.value != null && Number.isFinite(Number(row.value)) && Number(row.value) > 1 && !row.stopped);
+        const extractRows = value => {
+          if (Array.isArray(value)) return value;
+          if (value && Array.isArray(value.data)) return value.data;
+          if (value && value.odds) return extractRows(value.odds);
+          if (value && value.data && value.data.odds) return extractRows(value.data.odds);
+          return [];
+        };
+        rows = extractRows(rows);
+        if (!rows.length) {
+          try {
+            const fixture = await sportmonksRequest(env, "fixtures/" + fixtureId, { include: "odds" });
+            const fixtureRow = Array.isArray(fixture) ? fixture[0] : fixture;
+            const fallbackRows = extractRows(fixtureRow);
+            if (fallbackRows.length) {
+              rows = fallbackRows;
+              source = "fixture_odds_include";
+            }
+          } catch (fallbackError) {
+            // Keep the original endpoint response; a fallback failure should
+            // not hide valid information that the primary feed returned.
+          }
+        }
+        const odds = rows.map(row => {
+          const market = row.market && row.market.data ? row.market.data : row.market;
+          const bookmaker = row.bookmaker && row.bookmaker.data ? row.bookmaker.data : row.bookmaker;
+          return {
+            fixtureId: row.fixture_id || fixtureId,
+            marketId: row.market_id,
+            market: row.market_description || market && (market.name || market.description) || "",
+            bookmaker: bookmaker && (bookmaker.name || bookmaker.title) || (row.bookmaker_id ? "Bookmaker " + row.bookmaker_id : "Bookmaker"),
+            bookmakerId: row.bookmaker_id,
+            label: row.label || row.name || row.original_label || "",
+            value: row.value,
+            total: row.total,
+            handicap: row.handicap,
+            updatedAt: row.latest_bookmaker_update || row.updated_at || null,
+            stopped: row.stopped === true || row.stopped === 1 || row.stopped === "true"
+          };
+        }).filter(row => row.value != null && Number.isFinite(Number(row.value)) && Number(row.value) > 1 && !row.stopped);
         const updatedAt = odds.map(row => row.updatedAt).filter(Boolean).sort().slice(-1)[0] || null;
-        return reply({ app: "JUDY AI", success: true, mode: "pre_match_odds", fixtureId, odds, updatedAt, count: odds.length });
+        return reply({
+          app: "JUDY AI", success: true, mode: "pre_match_odds", fixtureId,
+          odds, updatedAt, count: odds.length, source,
+          message: odds.length ? "Real bookmaker odds loaded." :
+            "Sportmonks returned no pre-match odds for this fixture. This can mean odds are not supplied for this match or the account does not include the odds feed."
+        });
       } catch (error) {
         return reply({
           app: "JUDY AI", success: false,
-          error: error && error.status === 403 ? "Real bookmaker odds are not included in the current Sportmonks subscription or access is denied." :
+          error: error && error.status === 403 ? "Sportmonks denied access to the bookmaker odds feed. The odds feature must be included in the Sportmonks subscription." :
             error && error.status === 429 ? "Odds are temporarily rate-limited. Please try again shortly." :
-            "Could not load bookmaker odds.",
+            "Could not load bookmaker odds from Sportmonks.",
           providerStatus: error && error.status || null,
+          providerMessage: error && error.details && (error.details.message || error.details.error) || null,
           retryAfterSeconds: error && error.retryAfterSeconds || null
         }, error && error.status === 429 ? 429 : error && error.status === 403 ? 403 : 502);
       }
