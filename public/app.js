@@ -171,7 +171,7 @@ function renderMatches(matches) {
   loadSavedPredictions(matches);
 }
 async function loadSavedPredictions(matches) {
-  const ids = matches.map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\\d+$/.test(id); });
+  const ids = matches.map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id); });
   if (!ids.length) return;
   try {
     const response = await fetch("/api/predictions/saved?fixtureIds=" + encodeURIComponent(ids.join(",")), { headers: {"Accept":"application/json"} });
