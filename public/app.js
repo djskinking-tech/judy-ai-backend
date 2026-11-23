@@ -171,6 +171,85 @@ function logoMarkup(url) {
   if (!url) return '<span class="team-placeholder">⚽</span>';
   return '<img src="' + escapeHtml(url) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
 }
+function oddsLabel(value) {
+  return String(value == null ? "" : value).toLowerCase().trim().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
+}
+function oddsMarketType(row) {
+  const market = oddsLabel(row.market);
+  if (market.includes("both teams") || market.includes("btts")) return "btts";
+  if (market.includes("over") && market.includes("under")) return "goals";
+  if (market.includes("match winner") || market.includes("full time result") ||
+      market.includes("fulltime result") || market.includes("3 way") ||
+      market === "1x2" || market === "winner") return "result";
+  return "";
+}
+function oddsOutcome(rows, wanted) {
+  return rows.find(function (row) {
+    const label = oddsLabel(row.label);
+    if (wanted === "home") return ["home", "1", "team 1", "1st"].includes(label);
+    if (wanted === "draw") return ["draw", "x"].includes(label);
+    if (wanted === "away") return ["away", "2", "team 2", "2nd"].includes(label);
+    if (wanted === "over") return label === "over" && String(row.total || row.handicap || "2.5") === "2.5";
+    if (wanted === "under") return label === "under" && String(row.total || row.handicap || "2.5") === "2.5";
+    if (wanted === "yes") return ["yes", "both teams to score yes"].includes(label);
+    if (wanted === "no") return ["no", "both teams to score no"].includes(label);
+    return false;
+  });
+}
+function renderOddsMarkup(payload) {
+  const rows = Array.isArray(payload.odds) ? payload.odds : [];
+  if (!rows.length) return '<p class="odds-empty">No bookmaker odds are currently available for this match.</p>';
+  const byBookmaker = new Map();
+  rows.forEach(function (row) {
+    const name = row.bookmaker || "Bookmaker";
+    if (!byBookmaker.has(name)) byBookmaker.set(name, []);
+    byBookmaker.get(name).push(row);
+  });
+  const cards = Array.from(byBookmaker.entries()).slice(0, 4).map(function (entry) {
+    const name = entry[0], bookmakerRows = entry[1];
+    const resultRows = bookmakerRows.filter(function (row) { return oddsMarketType(row) === "result"; });
+    const goalRows = bookmakerRows.filter(function (row) { return oddsMarketType(row) === "goals"; });
+    const bttsRows = bookmakerRows.filter(function (row) { return oddsMarketType(row) === "btts"; });
+    function price(group, key) {
+      const row = oddsOutcome(group, key);
+      return row ? Number(row.value).toFixed(2) : "—";
+    }
+    const result = resultRows.length ? '<div class="odds-market"><span>1 · X · 2</span><b>' + price(resultRows,"home") + ' · ' + price(resultRows,"draw") + ' · ' + price(resultRows,"away") + '</b></div>' : '';
+    const goals = goalRows.length ? '<div class="odds-market"><span>Over / Under 2.5</span><b>' + price(goalRows,"over") + ' / ' + price(goalRows,"under") + '</b></div>' : '';
+    const btts = bttsRows.length ? '<div class="odds-market"><span>BTTS Yes / No</span><b>' + price(bttsRows,"yes") + ' / ' + price(bttsRows,"no") + '</b></div>' : '';
+    return '<div class="odds-bookmaker"><strong>' + escapeHtml(name) + '</strong>' +
+      (result + goals + btts || '<span class="odds-empty">Requested markets not listed</span>') + '</div>';
+  }).join("");
+  const stamp = payload.updatedAt ? 'Last bookmaker update: ' + escapeHtml(payload.updatedAt) : 'Update time not supplied';
+  return cards + '<p class="odds-updated">' + stamp + ' · Decimal odds</p>';
+}
+async function loadFixtureOdds(button) {
+  const fixtureId = button.dataset.fixtureId;
+  const panel = document.getElementById("odds-" + fixtureId);
+  if (!panel || !/^\\d+$/.test(fixtureId || "")) return;
+  if (panel.dataset.loaded === "true") {
+    panel.hidden = !panel.hidden;
+    button.textContent = panel.hidden ? "Show odds" : "Hide odds";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Loading odds…";
+  panel.hidden = false;
+  panel.innerHTML = '<p class="odds-empty">Checking available bookmakers…</p>';
+  try {
+    const response = await fetch("/api/odds?fixtureId=" + encodeURIComponent(fixtureId), { headers: {"Accept":"application/json"} });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || "Odds unavailable.");
+    panel.innerHTML = renderOddsMarkup(payload);
+    panel.dataset.loaded = "true";
+    button.textContent = "Hide odds";
+  } catch (error) {
+    panel.innerHTML = '<p class="odds-empty">' + escapeHtml(error.message || "Could not load odds.") + '</p>';
+    button.textContent = "Retry odds";
+  } finally {
+    button.disabled = false;
+  }
+}
 function renderMatches(matches) {
   if (!matches.length) {
     fixturesBox.innerHTML = '<div class="empty-state">No fixtures were returned for this date. Try another date.</div>';
@@ -191,7 +270,8 @@ function renderMatches(matches) {
         '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
-      '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button></div>' +
+      '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button><button class="odds-button" type="button" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">Show odds</button></div>' +
+      '<div class="odds-panel" id="odds-' + escapeHtml(match.id || match.fixture_id || "") + '" hidden></div>' +
       '<div class="prediction-results" id="prediction-' + escapeHtml(match.id || match.fixture_id || "") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>' +
     '</article>';
   }).join("");
@@ -455,6 +535,11 @@ liveScoreTimer = setInterval(function () {
 }, 30000);
 
 fixturesBox.addEventListener("click", function (event) {
+  const oddsButton = event.target.closest(".odds-button");
+  if (oddsButton) {
+    loadFixtureOdds(oddsButton);
+    return;
+  }
   const button = event.target.closest(".prediction-button");
   if (button) generatePrediction(button);
 });
