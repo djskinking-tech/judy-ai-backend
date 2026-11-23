@@ -149,7 +149,7 @@ function fixtureFinalScore(match) {
     if (!team) return null;
     const candidates = rows.filter(function (row) {
       return Number(row.participant_id) === Number(team.id) &&
-        ["CURRENT", "2ND_HALF", "FULL_TIME", "FT"].includes(String(row.description || "").toUpperCase().replace(/[\\s-]+/g, "_")) &&
+        ["CURRENT", "2ND_HALF", "FULL_TIME", "FT"].includes(String(row.description || "").toUpperCase().replace(/[\s-]+/g, "_")) &&
         row.score && row.score.goals !== null && row.score.goals !== undefined &&
         Number.isFinite(Number(row.score.goals));
     });
