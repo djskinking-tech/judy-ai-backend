@@ -85,6 +85,201 @@ export default {
       });
     }
 
+    if (url.pathname === "/api/backtest") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
+
+      const rawIds = (url.searchParams.get("fixtureIds") || "").split(",").map(v => v.trim()).filter(Boolean);
+      if (!rawIds.length || rawIds.length > 5 || rawIds.some(id => !/^\\d+$/.test(id))) {
+        return reply({ error: "Provide 1 to 5 comma-separated completed Sportmonks fixture IDs in fixtureIds." }, 400);
+      }
+
+      async function sportmonks(path, params = {}) {
+        const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
+        apiUrl.searchParams.set("api_token", env.SPORTMONKS_API_TOKEN);
+        for (const [key, value] of Object.entries(params)) apiUrl.searchParams.set(key, value);
+        const response = await fetch(apiUrl.toString(), { headers: { "Accept": "application/json" } });
+        const raw = await response.text();
+        let body;
+        try { body = JSON.parse(raw); } catch { throw new Error("Sportmonks returned unreadable data (HTTP " + response.status + ")."); }
+        if (!response.ok) {
+          const error = new Error("Sportmonks request failed (HTTP " + response.status + ").");
+          error.status = response.status;
+          error.details = body;
+          throw error;
+        }
+        return body.data;
+      }
+
+      function weightedAverage(values, weights) {
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        return totalWeight ? values.reduce((sum, value, index) => sum + value * weights[index], 0) / totalWeight : null;
+      }
+
+      function periodAverages(form, key, preferredVenue, kickoff) {
+        const venueRows = form.filter(item => item.venue === preferredVenue && item[key]);
+        const useVenueSplit = venueRows.length >= 3;
+        const selected = useVenueSplit ? venueRows : form.filter(item => item[key]);
+        const rows = selected.map(item => {
+          const matchDate = new Date(String(item.date || "").replace(" ", "T") + "Z");
+          const ageDays = Number.isNaN(matchDate.getTime()) ? 0 :
+            Math.max(0, (kickoff.getTime() - matchDate.getTime()) / 86400000);
+          return { stats: item[key], weight: Math.exp(-Math.LN2 * ageDays / 45) };
+        });
+        const weights = rows.map(row => row.weight);
+        return {
+          scored: weightedAverage(rows.map(row => row.stats.scored), weights),
+          conceded: weightedAverage(rows.map(row => row.stats.conceded), weights),
+          venueMatches: venueRows.length,
+          venueSplitUsed: useVenueSplit
+        };
+      }
+
+      function scoreText(home, away) {
+        return home && away ? home.scored + "-" + away.scored : null;
+      }
+
+      const tested = [];
+      try {
+        for (const fixtureId of rawIds) {
+          const target = await sportmonks("fixtures/" + fixtureId, {
+            include: "participants;league;scores;state"
+          });
+          if (!target || !Array.isArray(target.participants)) {
+            tested.push({ fixtureId, status: "fixture_not_found" });
+            continue;
+          }
+          const homeTeam = target.participants.find(p => p.meta && p.meta.location === "home");
+          const awayTeam = target.participants.find(p => p.meta && p.meta.location === "away");
+          if (!homeTeam || !awayTeam) {
+            tested.push({ fixtureId, status: "team_data_missing" });
+            continue;
+          }
+
+          const kickoff = new Date(String(target.starting_at).replace(" ", "T") + "Z");
+          if (Number.isNaN(kickoff.getTime())) {
+            tested.push({ fixtureId, status: "invalid_kickoff" });
+            continue;
+          }
+          const endDate = target.starting_at.slice(0, 10);
+          const startDate = new Date(kickoff.getTime() - 180 * 86400000).toISOString().slice(0, 10);
+          const [homeHistory, awayHistory] = await Promise.all([
+            sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + homeTeam.id, {
+              include: "scores;participants", per_page: "50", order: "desc"
+            }),
+            sportmonks("fixtures/between/" + startDate + "/" + endDate + "/" + awayTeam.id, {
+              include: "scores;participants", per_page: "50", order: "desc"
+            })
+          ]);
+
+          function recentForm(rows, teamId) {
+            return (Array.isArray(rows) ? rows : [])
+              .filter(f => Number(f.id) !== Number(fixtureId) &&
+                new Date(String(f.starting_at || "").replace(" ", "T") + "Z").getTime() < kickoff.getTime())
+              .map(f => {
+                const participant = Array.isArray(f.participants)
+                  ? f.participants.find(p => Number(p.id) === Number(teamId)) : null;
+                return {
+                  ft: goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF"),
+                  ht: goalsForAgainst(f, teamId, "1ST_HALF"),
+                  date: f.starting_at,
+                  venue: participant && participant.meta ? participant.meta.location : null
+                };
+              })
+              .filter(f => f.ft)
+              .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+              .slice(0, 8);
+          }
+
+          const homeForm = recentForm(homeHistory, homeTeam.id);
+          const awayForm = recentForm(awayHistory, awayTeam.id);
+          if (homeForm.length < 3 || awayForm.length < 3) {
+            tested.push({
+              fixtureId, match: target.name, status: "insufficient_history",
+              sampleSize: { home: homeForm.length, away: awayForm.length }
+            });
+            continue;
+          }
+
+          const hft = periodAverages(homeForm, "ft", "home", kickoff);
+          const aft = periodAverages(awayForm, "ft", "away", kickoff);
+          const hht = periodAverages(homeForm, "ht", "home", kickoff);
+          const aht = periodAverages(awayForm, "ht", "away", kickoff);
+          const expectedGoals = (attack, defence) => Math.max(0.05, Math.min(4.5, (attack + defence) / 2));
+          const ftHome = expectedGoals(hft.scored, aft.conceded);
+          const ftAway = expectedGoals(aft.scored, hft.conceded);
+          const htReady = hht.scored !== null && aht.scored !== null &&
+            hht.conceded !== null && aht.conceded !== null;
+          const ftOptions = topScoreOptions(ftHome, ftAway);
+          const htOptions = htReady ? topScoreOptions(
+            expectedGoals(hht.scored, aht.conceded),
+            expectedGoals(aht.scored, hht.conceded)
+          ) : null;
+
+          const actualHomeFT = goalsForAgainst(target, homeTeam.id, "CURRENT") ||
+            goalsForAgainst(target, homeTeam.id, "2ND_HALF");
+          const actualAwayFT = goalsForAgainst(target, awayTeam.id, "CURRENT") ||
+            goalsForAgainst(target, awayTeam.id, "2ND_HALF");
+          const actualHomeHT = goalsForAgainst(target, homeTeam.id, "1ST_HALF");
+          const actualAwayHT = goalsForAgainst(target, awayTeam.id, "1ST_HALF");
+          const actualFT = scoreText(actualHomeFT, actualAwayFT);
+          const actualHT = scoreText(actualHomeHT, actualAwayHT);
+
+          if (!actualFT) {
+            tested.push({ fixtureId, match: target.name, status: "actual_result_not_available" });
+            continue;
+          }
+          tested.push({
+            fixtureId,
+            match: target.name,
+            kickoff: target.starting_at,
+            league: target.league && target.league.name,
+            status: "tested",
+            sampleSize: { home: homeForm.length, away: awayForm.length },
+            actual: { fullTime: actualFT, halfTime: actualHT },
+            predicted: { fullTime: ftOptions, halfTime: htOptions },
+            hits: {
+              fullTimeExact: ftOptions.some(option => option.score === actualFT),
+              fullTimeTopTwo: ftOptions.some(option => option.score === actualFT),
+              halfTimeExact: actualHT ? Boolean(htOptions && htOptions.some(option => option.score === actualHT)) : null,
+              halfTimeTopTwo: actualHT ? Boolean(htOptions && htOptions.some(option => option.score === actualHT)) : null
+            }
+          });
+        }
+
+        const completed = tested.filter(item => item.status === "tested");
+        const countHits = key => completed.filter(item => item.hits[key] === true).length;
+        const rate = hits => completed.length ? Number((hits / completed.length * 100).toFixed(2)) : null;
+        const htCompleted = completed.filter(item => item.actual.halfTime);
+        const htHits = htCompleted.filter(item => item.hits.halfTimeExact === true).length;
+        return reply({
+          app: "JUDY AI",
+          success: true,
+          mode: "historical_backtest",
+          warning: "Small-sample experimental test only. Predictions use only matches strictly before each fixture's kickoff; results are not proof of future accuracy.",
+          requestedFixtures: rawIds.length,
+          testedFixtures: completed.length,
+          skippedFixtures: tested.filter(item => item.status !== "tested"),
+          metrics: {
+            fullTimeExactScoreHits: countHits("fullTimeExact"),
+            fullTimeExactScoreAccuracyPercent: rate(countHits("fullTimeExact")),
+            fullTimeTopTwoHits: countHits("fullTimeTopTwo"),
+            fullTimeTopTwoAccuracyPercent: rate(countHits("fullTimeTopTwo")),
+            halfTimeFixturesWithResults: htCompleted.length,
+            halfTimeExactScoreHits: htHits,
+            halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((htHits / htCompleted.length * 100).toFixed(2)) : null
+          },
+          results: completed
+        });
+      } catch (error) {
+        return reply({
+          error: error.message || "Historical backtest failed",
+          providerStatus: error.status || null,
+          details: error.details || null
+        }, error.status || 502);
+      }
+    }
+
     if (url.pathname === "/api/predictions") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
