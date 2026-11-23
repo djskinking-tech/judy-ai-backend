@@ -31,9 +31,9 @@
       '</div></article>';
   }
   function hitLabel(label, hit) {
-    if (hit === true) return label + ': HIT';
-    if (hit === false) return label + ': MISS';
-    return label + ': —';
+    if (hit === true) return label + ': WON';
+    if (hit === false) return label + ': LOST';
+    return label + ': PENDING';
   }
   function renderRecords(items) {
     if (!items.length) {
@@ -61,7 +61,7 @@
         (item.status === "completed" ? "is-complete" : "") + '">' + escapeHtml(actualText) +
         '<small class="record-outcome">' + escapeHtml(outcomeText) + '</small></div><span class="record-status ' +
         (item.status === "completed" ? "is-complete" : "") + '">' +
-        escapeHtml(item.status || "pending") + '</span></article>';
+        escapeHtml(item.status === "completed" ? "RESULTS RECORDED" : "PENDING") + '</span></article>';
     }).join("");
   }
   async function loadPerformance() {
