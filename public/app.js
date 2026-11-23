@@ -122,11 +122,25 @@ async function generatePrediction(button) {
     const payload = await response.json();
     if (!response.ok || payload.error) throw new Error(payload.error || "Prediction request failed.");
     if (!payload.success) throw new Error(payload.message || "Not enough historical data for a prediction.");
+    const saveStatus = payload.tracking && payload.tracking.saveStatus
+      ? payload.tracking.saveStatus : "save_status_missing";
+    const trackingMessage = saveStatus === "saved"
+      ? "✓ Prediction saved before kick-off"
+      : saveStatus === "already_saved"
+        ? "✓ Original pre-kickoff prediction is already saved"
+        : saveStatus === "storage_not_configured"
+          ? "⚠ Prediction storage is not configured; this prediction was not saved"
+          : saveStatus === "save_failed"
+            ? "⚠ Prediction could not be saved. Please try again and check tracking."
+            : "⚠ Save confirmation was not received";
+    const trackingClass = (saveStatus === "saved" || saveStatus === "already_saved")
+      ? "tracking-confirmed" : "tracking-warning";
     panel.innerHTML = predictionOptionsMarkup("Half-time", payload.predictions.halfTime) +
       predictionOptionsMarkup("Full-time", payload.predictions.fullTime) +
       '<p class="prediction-disclaimer">Experimental estimates · ' + escapeHtml(payload.confidence) +
       ' confidence · ' + escapeHtml(payload.sampleSize.home) + ' home / ' + escapeHtml(payload.sampleSize.away) +
-      ' away matches analysed. Not guaranteed.</p>';
+      ' away matches analysed. Not guaranteed.</p>' +
+      '<p class="prediction-tracking ' + trackingClass + '">' + escapeHtml(trackingMessage) + '</p>';
     button.textContent = "Refresh predictions";
   } catch (error) {
     panel.innerHTML = '<div class="prediction-error">' + escapeHtml(error.message || "Could not generate predictions.") + '</div>';
