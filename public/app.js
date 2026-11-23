@@ -144,24 +144,28 @@ async function generatePrediction(button) {
     }
     const saveStatus = payload.tracking && payload.tracking.saveStatus
       ? payload.tracking.saveStatus : "save_status_missing";
-    const trackingMessage = saveStatus === "saved"
-      ? "✓ Prediction saved before kick-off"
-      : saveStatus === "already_saved"
-        ? "✓ Original pre-kickoff prediction is already saved"
-        : saveStatus === "storage_not_configured"
-          ? "⚠ Prediction storage is not configured; this prediction was not saved"
-          : saveStatus === "save_failed"
-            ? "⚠ Prediction could not be saved. Please try again and check tracking."
-            : "⚠ Save confirmation was not received";
+    const trackingMessage = payload.historical
+      ? "✓ Original pre-kickoff prediction · saved and shown after kick-off"
+      : saveStatus === "saved"
+        ? "✓ Prediction saved before kick-off"
+        : saveStatus === "already_saved"
+          ? "✓ Original pre-kickoff prediction is already saved"
+          : saveStatus === "storage_not_configured"
+            ? "⚠ Prediction storage is not configured; this prediction was not saved"
+            : saveStatus === "save_failed"
+              ? "⚠ Prediction could not be saved. Please try again and check tracking."
+              : "⚠ Save confirmation was not received";
     const trackingClass = (saveStatus === "saved" || saveStatus === "already_saved")
       ? "tracking-confirmed" : "tracking-warning";
     panel.innerHTML = predictionOptionsMarkup("Half-time", payload.predictions.halfTime) +
       predictionOptionsMarkup("Full-time", payload.predictions.fullTime) +
-      '<p class="prediction-disclaimer">Experimental estimates · ' + escapeHtml(payload.confidence) +
-      ' confidence · ' + escapeHtml(payload.sampleSize.home) + ' home / ' + escapeHtml(payload.sampleSize.away) +
+      '<p class="prediction-disclaimer">' + (payload.historical ? 'Original pre-kickoff estimate · ' : 'Experimental estimates · ') +
+      escapeHtml(payload.confidence || "Unrated") + ' confidence · ' +
+      escapeHtml(payload.sampleSize && payload.sampleSize.home != null ? payload.sampleSize.home : "—") +
+      ' home / ' + escapeHtml(payload.sampleSize && payload.sampleSize.away != null ? payload.sampleSize.away : "—") +
       ' away matches analysed. Not guaranteed.</p>' +
       '<p class="prediction-tracking ' + trackingClass + '">' + escapeHtml(trackingMessage) + '</p>';
-    button.textContent = "Refresh predictions";
+    button.textContent = payload.historical ? "View saved prediction" : "Refresh predictions";
   } catch (error) {
     panel.innerHTML = '<div class="prediction-error">' + escapeHtml(error.message || "Could not generate predictions.") + '</div>';
     button.textContent = "Try again";
