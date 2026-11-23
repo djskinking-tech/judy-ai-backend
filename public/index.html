@@ -48,6 +48,14 @@
         <div><strong>Ready when you are</strong><p>Choose a date and tap “Load fixtures”.</p></div>
       </div>
 
+      <section class="live-tracker" aria-live="polite">
+        <div class="live-tracker-heading">
+          <div><p class="eyebrow">REAL-TIME MATCH CENTER</p><h2>Live scores</h2><p id="live-score-updated">Checking for matches…</p></div>
+          <button id="refresh-live-scores" class="secondary-button" type="button">Refresh live scores</button>
+        </div>
+        <div id="live-score-list" class="live-score-list"><div class="live-empty">Loading live matches…</div></div>
+      </section>
+
       <section class="results-head">
         <div><h3>Worldwide matches</h3><p id="results-caption">Select a date to view scheduled matches.</p></div>
         <div id="match-count" class="match-count">— MATCHES</div>
