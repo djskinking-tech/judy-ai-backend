@@ -153,6 +153,15 @@ function reply(data, status = 200) {
   });
 }
 
+function nairobiDateOffset(days = 0) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day) + days));
+  return date.toISOString().slice(0, 10);
+}
+
 function trackingKey(fixtureId) { return "prediction:" + String(fixtureId); }
 
 async function storePrediction(env, result) {
@@ -234,6 +243,88 @@ export default {
         run.errors.push("Sportmonks token or JUDY_PREDICTIONS binding is missing.");
         return;
       }
+      // Prepare tomorrow's fixtures in small hourly batches. The existing prediction
+      // endpoint remains the single source of model logic and freezes first forecasts.
+      try {
+        const tomorrow = nairobiDateOffset(1);
+        const batchKey = "autopregen:" + tomorrow;
+        let batch = await env.JUDY_PREDICTIONS.get(batchKey);
+        batch = batch ? JSON.parse(batch) : null;
+        if (!batch || !Array.isArray(batch.fixtureIds)) {
+          const fixtureIds = [];
+          let pageNumber = 1;
+          let pageRows = [];
+          do {
+            pageRows = await sportmonksRequest(env, "fixtures/date/" + tomorrow, {
+              include: "participants;league;state", per_page: "50", page: String(pageNumber)
+            });
+            for (const fixture of Array.isArray(pageRows) ? pageRows : []) {
+              const kickoff = new Date(String(fixture.starting_at || "").replace(" ", "T") + "Z").getTime();
+              if (fixture.id && Number.isFinite(kickoff) && kickoff > Date.now()) fixtureIds.push(String(fixture.id));
+            }
+            pageNumber++;
+          } while (Array.isArray(pageRows) && pageRows.length === 50 && pageNumber <= 6);
+          batch = {
+            date: tomorrow,
+            createdAt: new Date().toISOString(),
+            fixtureIds: [...new Set(fixtureIds)],
+            nextIndex: 0,
+            generated: 0,
+            insufficientHistory: 0,
+            failed: 0,
+            pageLimitReached: pageNumber > 6 && pageRows.length === 50,
+            status: fixtureIds.length ? "in_progress" : "no_upcoming_fixtures"
+          };
+        }
+
+        run.autoPredictionDate = tomorrow;
+        run.autoPredictionFixturesFound = batch.fixtureIds.length;
+        run.autoPredictionGenerated = 0;
+        run.autoPredictionInsufficientHistory = 0;
+        run.autoPredictionFailed = 0;
+        const endIndex = Math.min(batch.nextIndex + 3, batch.fixtureIds.length);
+        for (let index = batch.nextIndex; index < endIndex; index++) {
+          const fixtureId = batch.fixtureIds[index];
+          try {
+            const response = await this.fetch(new Request(
+              WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
+              { method: "GET" }
+            ), env, ctx);
+            const result = await response.json();
+            if (response.ok && result && result.success === true && result.predictions) {
+              batch.generated++;
+              run.autoPredictionGenerated++;
+            } else if (result && result.status === "insufficient_history") {
+              batch.insufficientHistory++;
+              run.autoPredictionInsufficientHistory++;
+            } else if (response.status === 409) {
+              // Fixture has already kicked off; it is safely excluded.
+            } else {
+              batch.failed++;
+              run.autoPredictionFailed++;
+              run.errors.push("Auto prediction " + fixtureId + ": " +
+                String(result && (result.error || result.message) || "Prediction unavailable").slice(0, 180));
+            }
+          } catch (error) {
+            batch.failed++;
+            run.autoPredictionFailed++;
+            run.errors.push("Auto prediction " + fixtureId + ": " +
+              String(error && error.message || error).slice(0, 180));
+          }
+          batch.nextIndex = index + 1;
+        }
+        if (batch.nextIndex >= batch.fixtureIds.length) batch.status = "completed";
+        batch.updatedAt = new Date().toISOString();
+        await env.JUDY_PREDICTIONS.put(batchKey, JSON.stringify(batch));
+        run.autoPredictionStatus = batch.status;
+        run.autoPredictionNextIndex = batch.nextIndex;
+        run.autoPredictionPageLimitReached = Boolean(batch.pageLimitReached);
+      } catch (error) {
+        run.autoPredictionStatus = "failed";
+        run.errors.push("Tomorrow auto-generation: " +
+          String(error && error.message || error).slice(0, 220));
+      }
+
       do {
         const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
         for (const key of page.keys || []) {
