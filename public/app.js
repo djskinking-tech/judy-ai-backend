@@ -165,9 +165,42 @@ function renderMatches(matches) {
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
       '<div class="prediction-actions"><button class="prediction-button" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">Generate AI predictions</button></div>' +
-      '<div class="prediction-results" id="prediction-' + escapeHtml(match.id || match.fixture_id || "") + '"><div class="prediction-label"><span>Half-time score</span><b>Not generated</b></div><div class="prediction-label"><span>Full-time score</span><b>Not generated</b></div></div>' +
+      '<div class="prediction-results" id="prediction-' + escapeHtml(match.id || match.fixture_id || "") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>' +
     '</article>';
   }).join("");
+  loadSavedPredictions(matches);
+}
+async function loadSavedPredictions(matches) {
+  const ids = matches.map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\\d+$/.test(id); });
+  if (!ids.length) return;
+  try {
+    const response = await fetch("/api/predictions/saved?fixtureIds=" + encodeURIComponent(ids.join(",")), { headers: {"Accept":"application/json"} });
+    const payload = await response.json();
+    if (!response.ok || !payload.success || !payload.predictions) throw new Error(payload.error || "Saved predictions unavailable");
+    ids.forEach(function (id) {
+      const saved = payload.predictions[id];
+      const panel = document.getElementById("prediction-" + id);
+      const button = document.querySelector(".prediction-button[data-fixture-id=\"" + id + "\"]");
+      if (!panel || !button) return;
+      if (!saved) {
+        panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
+        button.textContent = "Generate now";
+        return;
+      }
+      panel.innerHTML = predictionOptionsMarkup("Half-time", saved.predictions && saved.predictions.halfTime) +
+        predictionOptionsMarkup("Full-time", saved.predictions && saved.predictions.fullTime) +
+        '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
+        teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
+        '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
+      button.textContent = "Prediction saved";
+      button.disabled = true;
+    });
+  } catch (error) {
+    console.warn("Could not load saved predictions:", error);
+    document.querySelectorAll(".prediction-results").forEach(function (panel) {
+      if (panel.textContent.includes("Checking saved prediction")) panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Could not check saved predictions. Refresh fixtures.</b></div>';
+    });
+  }
 }
 function predictionOptionsMarkup(period, data) {
   if (!data || !Array.isArray(data.options) || !data.options.length) {
@@ -195,7 +228,7 @@ function predictionOutcomeMarkup(payload) {
         });
       }
     }
-    const status = hit === true ? "WON ✅" : hit === false ? "LOST ❌" : "PENDING ⏳";
+    const status = hit === true ? "WON" : hit === false ? "LOST" : "PENDING";
     const statusClass = hit === true ? "outcome-won" : hit === false ? "outcome-lost" : "outcome-pending";
     const scoreText = actualScore ? "Actual: " + escapeHtml(actualScore) : "Actual score: pending";
     return '<div class="outcome-period"><b class="' + statusClass + '">' + label + ': ' + status +
@@ -206,7 +239,7 @@ function predictionOutcomeMarkup(payload) {
     '<strong>JUDY AI RESULT TRACKING</strong>' +
     period("HALF-TIME", "halfTime", actual.halfTime) +
     period("FULL-TIME", "fullTime", actual.fullTime) +
-    '<small>WON ✅ means at least one of JUDY AI’s two ranked scores matched. LOST ❌ means neither matched. Results remain PENDING ⏳ until the official score is available.</small></section>';
+    '<small>WON means at least one of JUDY AI’s two ranked scores matched. LOST means neither matched. Results remain PENDING until the official score is available.</small></section>';
 }
 function playerWatchMarkup(data) {
   if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
