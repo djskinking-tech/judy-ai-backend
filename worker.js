@@ -170,7 +170,19 @@ async function storePrediction(env, result) {
   // Freeze the first pre-kickoff prediction for an unbiased performance record.
   // Refreshing a fixture must never overwrite its original prediction.
   const existing = await env.JUDY_PREDICTIONS.get(key);
-  if (existing) return "already_saved";
+  if (existing) {
+    // Preserve the original pre-kickoff prediction, but enrich older records
+    // that were saved before Match Intelligence was introduced.
+    try {
+      const record = JSON.parse(existing);
+      if (record && !record.teamIntelligence && result.teamIntelligence) {
+        record.teamIntelligence = result.teamIntelligence;
+        record.teamIntelligenceAddedAt = new Date().toISOString();
+        await env.JUDY_PREDICTIONS.put(key, JSON.stringify(record));
+      }
+    } catch {}
+    return "already_saved";
+  }
   const record = {
     fixtureId: result.fixture.id,
     fixture: result.fixture,
@@ -876,7 +888,7 @@ export default {
       }
 
       const cache = caches.default;
-      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v3/" + fixtureId);
+      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v4/" + fixtureId);
       const cached = await cache.match(cacheKey);
       if (cached) {
         const cachedResult = await cached.clone().json();
