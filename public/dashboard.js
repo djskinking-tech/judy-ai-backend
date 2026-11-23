@@ -30,6 +30,11 @@
       metricCard("HT top two", data.halfTimeTopTwo) +
       '</div></article>';
   }
+  function hitLabel(label, hit) {
+    if (hit === true) return label + ': HIT';
+    if (hit === false) return label + ': MISS';
+    return label + ': —';
+  }
   function renderRecords(items) {
     if (!items.length) {
       records.innerHTML = '<div class="dashboard-empty">No predictions have been saved yet. Generate a prediction for an upcoming match to start tracking.</div>';
@@ -38,17 +43,25 @@
     records.innerHTML = items.map(function (item) {
       const fixture = item.fixture || {};
       const name = fixture.name || ((fixture.homeTeam || "Home") + " vs " + (fixture.awayTeam || "Away"));
+      // The API stores actual scores as strings such as "2-1", not {home, away} objects.
       const ft = item.actual && item.actual.fullTime ? item.actual.fullTime : null;
       const ht = item.actual && item.actual.halfTime ? item.actual.halfTime : null;
       const actualText = item.status === "completed"
-        ? "FT " + (ft ? ft.home + "-" + ft.away : "—") + " · HT " + (ht ? ht.home + "-" + ht.away : "—")
+        ? "FT " + (ft || "—") + " · HT " + (ht || "—")
         : "Result pending";
+      const evaluation = item.evaluation && item.evaluation.v2_1 ? item.evaluation.v2_1 : {};
+      const ftHit = evaluation.fullTime ? evaluation.fullTime.topTwo : null;
+      const htHit = evaluation.halfTime ? evaluation.halfTime.topTwo : null;
+      const outcomeText = item.status === "completed"
+        ? hitLabel("FT top two", ftHit) + " · " + hitLabel("HT top two", htHit)
+        : "Waiting for final result";
       return '<article class="record-row"><div><strong>' + escapeHtml(name) +
         '</strong><span>' + escapeHtml(fixture.league || "League TBC") + ' · ' +
         escapeHtml(fixture.startingAt || "Kick-off TBC") + '</span></div><div class="record-result ' +
         (item.status === "completed" ? "is-complete" : "") + '">' + escapeHtml(actualText) +
-        '</div><span class="record-status ' + (item.status === "completed" ? "is-complete" : "") +
-        '">' + escapeHtml(item.status || "pending") + '</span></article>';
+        '<small class="record-outcome">' + escapeHtml(outcomeText) + '</small></div><span class="record-status ' +
+        (item.status === "completed" ? "is-complete" : "") + '">' +
+        escapeHtml(item.status || "pending") + '</span></article>';
     }).join("");
   }
   async function loadPerformance() {
