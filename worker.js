@@ -431,11 +431,6 @@ export default {
             }, { bypassCache: true });
             run.fixturesChecked++;
             record.lastCheckedAt = new Date().toISOString();
-            if (!isFixtureFinished(fixture)) {
-              run.fixturesStillPending++;
-              await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
-              continue;
-            }
             const participants = Array.isArray(fixture.participants) ? fixture.participants : [];
             const home = participants.find(p => p.meta && p.meta.location === "home");
             const away = participants.find(p => p.meta && p.meta.location === "away");
@@ -445,6 +440,25 @@ export default {
               await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
               continue;
             }
+
+            // Capture and evaluate the half-time score as soon as Sportmonks publishes it.
+            const homeHT = goalsForAgainst(fixture, home.id, "1ST_HALF");
+            const awayHT = goalsForAgainst(fixture, away.id, "1ST_HALF");
+            const actualHT = homeHT && awayHT ? homeHT.scored + "-" + awayHT.scored : null;
+            record.actual = record.actual || { fullTime: null, halfTime: null };
+            if (actualHT && record.actual.halfTime !== actualHT) {
+              record.actual.halfTime = actualHT;
+              record.halfTimeCheckedAt = new Date().toISOString();
+              record.evaluation = evaluateTrackedRecord(record, record.actual.fullTime || null, actualHT);
+              run.fixturesHalfTimeEvaluated = (run.fixturesHalfTimeEvaluated || 0) + 1;
+            }
+
+            if (!isFixtureFinished(fixture)) {
+              run.fixturesStillPending++;
+              await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+              continue;
+            }
+
             const homeFT = goalsForAgainst(fixture, home.id, "CURRENT");
             const awayFT = goalsForAgainst(fixture, away.id, "CURRENT");
             if (!homeFT || !awayFT) {
@@ -453,14 +467,11 @@ export default {
               await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
               continue;
             }
-            const homeHT = goalsForAgainst(fixture, home.id, "1ST_HALF");
-            const awayHT = goalsForAgainst(fixture, away.id, "1ST_HALF");
             const actualFT = homeFT.scored + "-" + awayFT.scored;
-            const actualHT = homeHT && awayHT ? homeHT.scored + "-" + awayHT.scored : null;
             record.status = "completed";
             record.completedAt = new Date().toISOString();
-            record.actual = { fullTime: actualFT, halfTime: actualHT };
-            record.evaluation = evaluateTrackedRecord(record, actualFT, actualHT);
+            record.actual = { fullTime: actualFT, halfTime: actualHT || record.actual.halfTime || null };
+            record.evaluation = evaluateTrackedRecord(record, actualFT, record.actual.halfTime);
             await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
             run.fixturesCompleted++;
           } catch (error) {
