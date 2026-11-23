@@ -243,11 +243,16 @@ export default {
         run.errors.push("Sportmonks token or JUDY_PREDICTIONS binding is missing.");
         return;
       }
-      // Prepare tomorrow's fixtures in small hourly batches. The existing prediction
-      // endpoint remains the single source of model logic and freezes first forecasts.
-      try {
-        const tomorrow = nairobiDateOffset(1);
-        const batchKey = "autopregen:" + tomorrow;
+      // Prepare today's remaining fixtures and tomorrow's fixtures in small batches.
+      // Each date has its own persistent cursor so hourly runs can resume safely.
+      run.autoPredictionDates = [];
+      run.autoPredictionGenerated = 0;
+      run.autoPredictionInsufficientHistory = 0;
+      run.autoPredictionFailed = 0;
+      const autoDateResults = [];
+      for (const dayOffset of [0, 1]) {
+        const targetDate = nairobiDateOffset(dayOffset);
+        const batchKey = "autopregen:" + targetDate;
         let batch = await env.JUDY_PREDICTIONS.get(batchKey);
         batch = batch ? JSON.parse(batch) : null;
         if (!batch || !Array.isArray(batch.fixtureIds)) {
@@ -255,7 +260,7 @@ export default {
           let pageNumber = 1;
           let pageRows = [];
           do {
-            pageRows = await sportmonksRequest(env, "fixtures/date/" + tomorrow, {
+            pageRows = await sportmonksRequest(env, "fixtures/date/" + targetDate, {
               include: "participants;league;state", per_page: "50", page: String(pageNumber)
             });
             for (const fixture of Array.isArray(pageRows) ? pageRows : []) {
@@ -265,7 +270,7 @@ export default {
             pageNumber++;
           } while (Array.isArray(pageRows) && pageRows.length === 50 && pageNumber <= 6);
           batch = {
-            date: tomorrow,
+            date: targetDate,
             createdAt: new Date().toISOString(),
             fixtureIds: [...new Set(fixtureIds)],
             nextIndex: 0,
@@ -277,11 +282,9 @@ export default {
           };
         }
 
-        run.autoPredictionDate = tomorrow;
-        run.autoPredictionFixturesFound = batch.fixtureIds.length;
-        run.autoPredictionGenerated = 0;
-        run.autoPredictionInsufficientHistory = 0;
-        run.autoPredictionFailed = 0;
+        const generatedBefore = batch.generated;
+        const insufficientBefore = batch.insufficientHistory;
+        const failedBefore = batch.failed;
         const endIndex = Math.min(batch.nextIndex + 3, batch.fixtureIds.length);
         for (let index = batch.nextIndex; index < endIndex; index++) {
           const fixtureId = batch.fixtureIds[index];
@@ -295,18 +298,19 @@ export default {
             if (response.status === 429 || (result && result.providerStatus === 429)) {
               retryCurrent = true;
               run.rateLimited = true;
-              run.errors.push("Auto prediction batch paused by Sportmonks rate limiting; it will retry next scheduled run.");
+              run.errors.push("Auto prediction batch for " + targetDate + " paused by Sportmonks rate limiting; it will retry next scheduled run.");
             } else if (response.ok && result && result.success === true && result.predictions) {
-              batch.generated++;
-              run.autoPredictionGenerated++;
+              if (result.tracking && result.tracking.saveStatus === "already_saved") {
+                // An existing pre-kickoff record is preserved and not counted as a new prediction.
+              } else {
+                batch.generated++;
+              }
             } else if (result && result.status === "insufficient_history") {
               batch.insufficientHistory++;
-              run.autoPredictionInsufficientHistory++;
             } else if (response.status === 409) {
               // Fixture has already kicked off; it is safely excluded.
             } else {
               batch.failed++;
-              run.autoPredictionFailed++;
               run.errors.push("Auto prediction " + fixtureId + ": " +
                 String(result && (result.error || result.message) || "Prediction unavailable").slice(0, 180));
             }
@@ -315,7 +319,6 @@ export default {
             if (retryCurrent) run.rateLimited = true;
             else {
               batch.failed++;
-              run.autoPredictionFailed++;
               run.errors.push("Auto prediction " + fixtureId + ": " +
                 String(error && error.message || error).slice(0, 180));
             }
@@ -324,17 +327,37 @@ export default {
           batch.nextIndex = index + 1;
         }
         if (batch.nextIndex >= batch.fixtureIds.length) batch.status = "completed";
+        else if (batch.status !== "no_upcoming_fixtures") batch.status = "in_progress";
         batch.updatedAt = new Date().toISOString();
         await env.JUDY_PREDICTIONS.put(batchKey, JSON.stringify(batch));
-        run.autoPredictionStatus = batch.status;
-        run.autoPredictionNextIndex = batch.nextIndex;
-        run.autoPredictionPageLimitReached = Boolean(batch.pageLimitReached);
-      } catch (error) {
-        run.autoPredictionStatus = "failed";
-        run.errors.push("Tomorrow auto-generation: " +
-          String(error && error.message || error).slice(0, 220));
-      }
 
+        const generatedThisRun = batch.generated - generatedBefore;
+        const insufficientThisRun = batch.insufficientHistory - insufficientBefore;
+        const failedThisRun = batch.failed - failedBefore;
+        run.autoPredictionGenerated += generatedThisRun;
+        run.autoPredictionInsufficientHistory += insufficientThisRun;
+        run.autoPredictionFailed += failedThisRun;
+        run.autoPredictionDates.push(targetDate);
+        autoDateResults.push({
+          date: targetDate,
+          fixturesFound: batch.fixtureIds.length,
+          generatedTotal: batch.generated,
+          insufficientHistoryTotal: batch.insufficientHistory,
+          failedTotal: batch.failed,
+          status: batch.status,
+          nextIndex: batch.nextIndex,
+          pageLimitReached: Boolean(batch.pageLimitReached)
+        });
+        if (run.rateLimited) break;
+      }
+      run.autoPredictionByDate = autoDateResults;
+      run.autoPredictionDate = autoDateResults.length ? autoDateResults[autoDateResults.length - 1].date : null;
+      run.autoPredictionFixturesFound = autoDateResults.reduce((sum, item) => sum + item.fixturesFound, 0);
+      run.autoPredictionStatus = run.rateLimited ? "paused_rate_limited" :
+        (autoDateResults.every(item => item.status === "completed" || item.status === "no_upcoming_fixtures")
+          ? "completed" : "in_progress");
+      run.autoPredictionNextIndex = autoDateResults.reduce((sum, item) => sum + item.nextIndex, 0);
+      run.autoPredictionPageLimitReached = autoDateResults.some(item => item.pageLimitReached);
       do {
         const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
         for (const key of page.keys || []) {
