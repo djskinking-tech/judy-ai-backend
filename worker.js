@@ -1018,7 +1018,7 @@ export default {
         const htHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average, v1HtHome) : v1HtHome) : null;
         const htAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average, v1HtAway) : v1HtAway) : null;
         const sampleSize = { home: homeForm.length, away: awayForm.length };
-        function teamIntelligence(form, venue) {
+        function buildTeamIntelligence(form, venue) {
           const lastFive = form.slice(0, 5).map(item => {
             const outcome = item.ft.scored > item.ft.conceded ? "W" :
               item.ft.scored < item.ft.conceded ? "L" : "D";
@@ -1048,8 +1048,8 @@ export default {
           };
         }
         const teamIntelligence = {
-          home: teamIntelligence(homeForm, "home"),
-          away: teamIntelligence(awayForm, "away"),
+          home: buildTeamIntelligence(homeForm, "home"),
+          away: buildTeamIntelligence(awayForm, "away"),
           source: "Sportmonks completed fixture score history",
           limitations: [
             "This section describes recent results only; it does not confirm injuries, suspensions or starting lineups.",
