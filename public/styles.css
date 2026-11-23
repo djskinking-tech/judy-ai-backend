@@ -94,3 +94,19 @@ footer{display:flex;justify-content:space-between;border-top:1px solid #1d2e41;p
 @media (max-width: 520px) { .player-watch-teams { grid-template-columns: 1fr; } }
 
 .prediction-outcome{margin:14px 0;padding:13px;border:1px solid var(--line);border-radius:12px;background:#0d1a29}.prediction-outcome>strong{display:block;color:var(--green);font-size:10px;letter-spacing:1.2px;margin-bottom:9px}.prediction-outcome p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.outcome-period{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:12px}.outcome-period b{color:var(--green)}.outcome-period b.outcome-won{color:#35d07f}.outcome-period b.outcome-lost{color:#ff646e}.outcome-period b.outcome-pending{color:var(--muted)}.outcome-period span{color:var(--muted)}.prediction-outcome.completed small{display:block;color:var(--muted);font-size:10px;margin-top:8px;line-height:1.5}
+
+
+/* Live score tracker */
+.live-tracker{margin:30px 0 36px;padding:20px;border:1px solid #345044;border-radius:18px;background:linear-gradient(145deg,#10241f,#0d1a29)}
+.live-tracker-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+.live-tracker-heading h2{font-size:24px}.live-tracker-heading p:last-child{font-size:10px;color:var(--muted);margin:6px 0 0}
+.live-score-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.live-score-card{padding:13px;border:1px solid #2a473e;border-radius:12px;background:#0b1918}
+.live-score-status{font-size:9px;letter-spacing:1px;font-weight:900;color:var(--green);margin-bottom:10px}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ff646e;margin-right:7px;box-shadow:0 0 9px #ff646e}
+.live-dot.finished{background:#91a4b8;box-shadow:none}
+.live-score-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:9px;font-size:11px;font-weight:750}
+.live-score-teams span:last-child{text-align:right}.live-score-teams strong{font-size:17px;color:#fff;white-space:nowrap}
+.live-score-league{font-size:9px;color:var(--muted);margin-top:9px}
+.live-empty{grid-column:1/-1;padding:16px;border:1px dashed #345044;border-radius:10px;color:var(--muted);font-size:11px;line-height:1.5}
+@media(max-width:680px){.live-tracker{padding:15px}.live-tracker-heading{align-items:flex-start;flex-direction:column}.live-tracker-heading .secondary-button{width:100%}.live-score-list{grid-template-columns:1fr}}
