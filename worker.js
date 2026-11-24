@@ -1575,8 +1575,8 @@ export default {
     }
 
     const cache = caches.default;
-    // v9 invalidates cached responses created before dynamic league discovery.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v9/" + date);
+    // v10 invalidates cached API responses created before competition-name diagnostics.
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v10/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
