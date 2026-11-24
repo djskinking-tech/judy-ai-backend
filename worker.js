@@ -1754,7 +1754,7 @@ export default {
           absences: activeAbsences.map(row => ({
             player: playerLabel(row), teamId: row.team_id || null, team: teamNameFor(row.team_id),
             category: absenceCategory(row),
-            reason: row.type && (row.type.name || row.type.code) || "Reason not supplied",
+            reason: (row.type && (row.type.name || row.type.code)) || row.category || (row.sideline && (row.sideline.name || row.sideline.category)) || "Reason not supplied",
             startDate: row.start_date || null, endDate: row.end_date || null,
             status: "Provider-listed unavailable", sourceStatus: "Sportmonks sidelined record"
           })),
