@@ -1655,12 +1655,82 @@ export default {
         matches = [...unique.values()];
       }
 
-      // Free fallback: TheSportsDB can supply a small fixture list when the
-      // current Sportmonks subscription returns no fixtures. These event IDs
-      // are NOT Sportmonks fixture IDs, so predictions and bookmaker odds
-      // must remain disabled for these rows.
+      // Free fallback 1: OpenLigaDB provides keyless schedules for several
+      // major competitions. Cache each season response for 24 hours so JUDY
+      // does not repeatedly poll a community-funded service.
       let fixtureSource = "Sportmonks";
       let fallbackNote = null;
+      if (!matches.length) {
+        const openLigaRows = [];
+        const season = Number(date.slice(0, 4)) - (Number(date.slice(5, 7)) < 7 ? 1 : 0);
+        const leagues = [
+          { shortcut: "pl", name: "Premier League", country: "England" },
+          { shortcut: "la1", name: "LaLiga", country: "Spain" },
+          { shortcut: "bl1", name: "Bundesliga", country: "Germany" },
+          { shortcut: "ucl", name: "UEFA Champions League", country: "Europe" }
+        ];
+        const kickoffFormatter = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit"
+        });
+        for (const league of leagues) {
+          try {
+            const apiUrl = "https://api.openligadb.de/getmatchdata/" + league.shortcut + "/" + season;
+            const cacheKey = new Request("https://judy-ai-cache.example/openligadb/" + league.shortcut + "/" + season);
+            let rows = [];
+            const cachedLeague = await caches.default.match(cacheKey);
+            if (cachedLeague) {
+              const cachedBody = await cachedLeague.json();
+              rows = Array.isArray(cachedBody) ? cachedBody : [];
+            } else {
+              const upstream = await fetch(apiUrl, { headers: { "Accept": "application/json" } });
+              if (upstream.ok) {
+                const body = await upstream.json();
+                rows = Array.isArray(body) ? body : [];
+                await caches.default.put(cacheKey, new Response(JSON.stringify(rows), {
+                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }
+                }));
+              }
+            }
+            for (const row of rows) {
+              if (!row || !row.matchID || !row.team1 || !row.team2) continue;
+              const rawUtc = row.matchDateTimeUTC || null;
+              const kickoff = rawUtc ? new Date(rawUtc) : null;
+              const localDate = kickoff && !Number.isNaN(kickoff.getTime())
+                ? kickoffFormatter.format(kickoff) : String(row.matchDateTime || "").slice(0, 10);
+              if (localDate !== date) continue;
+              const kickoffLabel = kickoff && !Number.isNaN(kickoff.getTime())
+                ? new Intl.DateTimeFormat("en-KE", {
+                    timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", hour12: true
+                  }).format(kickoff) + " EAT"
+                : (row.matchDateTime ? String(row.matchDateTime).slice(11, 16) + " (provider time; timezone unverified)" : "Kick-off time TBC");
+              openLigaRows.push({
+                id: "openligadb:" + String(row.matchID),
+                fixtureSource: "OpenLigaDB",
+                predictionsSupported: false,
+                date,
+                kickoffLabel,
+                homeTeam: row.team1.teamName || "Home team",
+                awayTeam: row.team2.teamName || "Away team",
+                league: { name: row.leagueName || league.name },
+                country: league.country,
+                status: row.matchIsFinished ? "Finished" : "Scheduled"
+              });
+            }
+          } catch {}
+        }
+        const uniqueOpenLiga = new Map(openLigaRows.map(row => [row.id, row]));
+        matches = [...uniqueOpenLiga.values()];
+        if (matches.length) {
+          fixtureSource = "OpenLigaDB";
+          source = "openligadb_fallback";
+          fallbackNote = "Free community fixture source. Coverage is limited to selected competitions; match data may be incomplete. Predictions and bookmaker odds are disabled because these IDs are not Sportmonks fixture IDs.";
+        }
+      }
+
+      // Free fallback 2: TheSportsDB can supply a small fixture list when
+      // Sportmonks and OpenLigaDB have no matching fixtures for this date.
+      // Its event IDs are not Sportmonks fixture IDs, so predictions and
+      // bookmaker odds must remain disabled for these rows.
       if (!matches.length) {
         try {
           const fallbackUrl = new URL("https://www.thesportsdb.com/api/v1/json/123/eventsday.php");
