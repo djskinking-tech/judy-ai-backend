@@ -1655,15 +1655,63 @@ export default {
         matches = [...unique.values()];
       }
 
+      // Free fallback: TheSportsDB can supply a small fixture list when the
+      // current Sportmonks subscription returns no fixtures. These event IDs
+      // are NOT Sportmonks fixture IDs, so predictions and bookmaker odds
+      // must remain disabled for these rows.
+      let fixtureSource = "Sportmonks";
+      let fallbackNote = null;
+      if (!matches.length) {
+        try {
+          const fallbackUrl = new URL("https://www.thesportsdb.com/api/v1/json/123/eventsday.php");
+          fallbackUrl.searchParams.set("d", date);
+          fallbackUrl.searchParams.set("s", "Soccer");
+          const fallbackResponse = await fetch(fallbackUrl.toString(), {
+            headers: { "Accept": "application/json" }
+          });
+          if (fallbackResponse.ok) {
+            const fallbackBody = await fallbackResponse.json();
+            const events = Array.isArray(fallbackBody && fallbackBody.events) ? fallbackBody.events : [];
+            matches = events.filter(event => event && event.idEvent && event.strHomeTeam && event.strAwayTeam)
+              .map(event => ({
+                id: String(event.idEvent),
+                fixtureSource: "TheSportsDB",
+                predictionsSupported: false,
+                date: event.dateEvent || date,
+                kickoffLabel: event.strTime ? event.strTime + " (provider time; timezone unverified)" : "Kick-off time TBC",
+                homeTeam: event.strHomeTeam,
+                awayTeam: event.strAwayTeam,
+                league: { name: event.strLeague || "Football" },
+                country: event.strCountry || "Worldwide",
+                status: event.strStatus || "Scheduled"
+              }));
+            if (matches.length) {
+              fixtureSource = "TheSportsDB";
+              source = "thesportsdb_fallback";
+              fallbackNote = "Limited free fallback coverage. Predictions and bookmaker odds are unavailable for these fixtures until verified team history and provider fixture mapping are available.";
+            } else {
+              fallbackNote = "Sportmonks returned no fixtures and TheSportsDB had no events for this date.";
+            }
+          } else {
+            fallbackNote = "Sportmonks returned no fixtures; TheSportsDB fallback request failed (HTTP " + fallbackResponse.status + ").";
+          }
+        } catch (fallbackError) {
+          fallbackNote = "Sportmonks returned no fixtures; TheSportsDB fallback was unavailable: " +
+            (fallbackError && fallbackError.message ? fallbackError.message : String(fallbackError));
+        }
+      }
+
       const result = {
         app: "JUDY AI",
         success: true,
-        provider: "Sportmonks",
+        provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
         total: matches.length,
         source,
         fallbackDatesChecked,
+        fallbackNote,
+        predictionsSupported: fixtureSource === "Sportmonks",
         pagination: {
           pages_fetched: primary.pagesFetched,
           page_limit_reached: primary.pageLimitReached,
