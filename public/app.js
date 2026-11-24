@@ -174,6 +174,7 @@ function teamLogo(match, side) {
   return obj?.logo || obj?.image || obj?.image_path || "";
 }
 function matchTime(match) {
+  if (match.kickoffLabel) return String(match.kickoffLabel);
   const raw = match.date || match.startDate || match.kickoff || match.startTime || match.starting_at;
   if (!raw) return "Kick-off time TBC";
   const parsed = new Date(String(raw).replace(" ", "T") + (String(raw).endsWith("Z") ? "" : "Z"));
@@ -311,6 +312,13 @@ function renderMatches(matches) {
     const away = teamName(match, "away");
     const league = leagueName(match);
     const status = matchStatus(match);
+    const fixtureId = match.id || match.fixture_id || "";
+    const supportsPredictions = match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false;
+    const actions = supportsPredictions
+      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button><button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button></div>' +
+        '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' +
+        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
+      : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
       '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span></div>' +
       '<div class="fixture-teams">' +
@@ -319,15 +327,13 @@ function renderMatches(matches) {
         '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
-      '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button><button class="odds-button" type="button" data-fixture-id="' + escapeHtml(match.id || match.fixture_id || "") + '">Show odds</button></div>' +
-      '<div class="odds-panel" id="odds-' + escapeHtml(match.id || match.fixture_id || "") + '" hidden></div>' +
-      '<div class="prediction-results" id="prediction-' + escapeHtml(match.id || match.fixture_id || "") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>' +
-    '</article>';
+      actions +
+      '</article>';
   }).join("");
   loadSavedPredictions(matches);
 }
 async function loadSavedPredictions(matches) {
-  const ids = matches.map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id); });
+  const ids = matches.filter(function (match) { return match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false; }).map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id); });
   if (!ids.length) return;
   try {
     const response = await fetch("/api/predictions/saved?fixtureIds=" + encodeURIComponent(ids.join(",")), { headers: {"Accept":"application/json"} });
@@ -556,9 +562,10 @@ async function loadFixtures() {
     }
     const matches = getMatches(payload);
     renderMatches(matches);
-    caption.textContent = "Fixtures for " + date + " · East Africa Time";
+    caption.textContent = "Fixtures for " + date + (payload.provider === "TheSportsDB" ? " · limited free fallback source" : " · East Africa Time");
     if (matches.length) {
-      showMessage("Fixtures loaded", "Received " + matches.length + " matches from Sportmonks.", "success");
+      const providerName = payload.provider || "Sportmonks";
+      showMessage("Fixtures loaded", "Received " + matches.length + " matches from " + providerName + "." + (payload.fallbackNote ? " " + payload.fallbackNote : ""), "success");
     } else {
       showMessage("No fixtures in the returned data", "Sportmonks returned zero matches for this date. It may be outside the leagues included in the current subscription. Try another date or an included league. JUDY AI will not invent fixtures.", "error");
     }
