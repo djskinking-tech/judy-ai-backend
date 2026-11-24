@@ -1068,7 +1068,7 @@ export default {
 
       // OpenLigaDB fixtures use their own IDs. Build a transparent fallback
       // prediction from recent completed team matches; never pass these IDs to Sportmonks.
-      if (/^openligadb:\\d+$/.test(fixtureId)) {
+      if (/^openligadb:\d+$/.test(fixtureId)) {
         try {
           const saved = await savedPredictionPayload(env, fixtureId);
           if (saved) return reply(saved);
