@@ -1992,7 +1992,7 @@ export default {
               openLigaRows.push({
                 id: "openligadb:" + String(row.matchID),
                 fixtureSource: "OpenLigaDB",
-                predictionsSupported: false,
+                predictionsSupported: true,
                 date,
                 kickoffLabel,
                 homeTeam,
@@ -2024,7 +2024,7 @@ export default {
         if (matches.length) {
           fixtureSource = "OpenLigaDB";
           source = "openligadb_fallback";
-          fallbackNote = "Free community fixture source covering selected competitions including the Champions League. Community data may be incomplete and should be verified. Predictions and bookmaker odds are disabled because these IDs are not Sportmonks fixture IDs.";
+          fallbackNote = "Free community fixture source covering selected competitions including the Champions League. Experimental score predictions can use recent OpenLigaDB team history when enough verified results are available. Community data may be incomplete; bookmaker odds are not available for these fixture IDs.";
         }
       }
 
@@ -2184,7 +2184,7 @@ export default {
         openLigaDiagnostics,
         openLigaCatalogueDiagnostics,
         openFootballDiagnostics,
-        predictionsSupported: fixtureSource === "Sportmonks",
+        predictionsSupported: fixtureSource === "Sportmonks" || fixtureSource === "OpenLigaDB",
         pagination: {
           pages_fetched: primary.pagesFetched,
           page_limit_reached: primary.pageLimitReached,
