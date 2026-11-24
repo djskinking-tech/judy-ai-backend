@@ -445,6 +445,39 @@ export default {
             if (!raw) continue;
             const record = JSON.parse(raw);
             if (record.status === "completed") continue;
+            if (String(record.fixtureId || "").startsWith("openligadb:")) {
+              const openId = String(record.fixtureId).split(":")[1];
+              const openResponse = await fetch("https://api.openligadb.de/getmatchdata/" + openId, { headers: { "Accept": "application/json" } });
+              if (!openResponse.ok) {
+                run.errors.push("OpenLigaDB fixture " + openId + " lookup failed (HTTP " + openResponse.status + ").");
+                run.fixturesStillPending++;
+                continue;
+              }
+              const openMatch = await openResponse.json();
+              record.lastCheckedAt = new Date().toISOString();
+              const openResults = Array.isArray(openMatch && openMatch.matchResults) ? openMatch.matchResults : [];
+              const htRow = openResults.find(row => String(row.resultTypeKind || "").toLowerCase() === "halftime" || Number(row.resultTypeID) === 1 || /half.?time|halbzeit/i.test(String(row.resultName || "")));
+              const ftRow = openResults.find(row => String(row.resultTypeKind || "").toLowerCase() === "after90minutes" || Number(row.resultTypeID) === 2 || /full.?time|endergebnis|endstand/i.test(String(row.resultName || "")));
+              const actualHT = htRow && Number.isFinite(Number(htRow.pointsTeam1)) && Number.isFinite(Number(htRow.pointsTeam2)) ? Number(htRow.pointsTeam1) + "-" + Number(htRow.pointsTeam2) : null;
+              const actualFT = ftRow && Number.isFinite(Number(ftRow.pointsTeam1)) && Number.isFinite(Number(ftRow.pointsTeam2)) ? Number(ftRow.pointsTeam1) + "-" + Number(ftRow.pointsTeam2) : null;
+              record.actual = record.actual || { fullTime: null, halfTime: null };
+              if (actualHT) {
+                record.actual.halfTime = actualHT;
+                record.evaluation = evaluateTrackedRecord(record, record.actual.fullTime || null, actualHT);
+              }
+              if (openMatch && openMatch.matchIsFinished && actualFT) {
+                record.status = "completed";
+                record.completedAt = new Date().toISOString();
+                record.actual = { fullTime: actualFT, halfTime: actualHT || record.actual.halfTime || null };
+                record.evaluation = evaluateTrackedRecord(record, actualFT, record.actual.halfTime);
+                run.fixturesCompleted++;
+              } else {
+                run.fixturesStillPending++;
+              }
+              await env.JUDY_PREDICTIONS.put(key.name, JSON.stringify(record));
+              run.fixturesChecked++;
+              continue;
+            }
             const kickoffTime = new Date(String(record.fixture && record.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
             if (!Number.isFinite(kickoffTime) || kickoffTime > Date.now()) continue;
             run.dueFixtures++;
@@ -1054,7 +1087,7 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.JUDY_PREDICTIONS) return reply({ app: "JUDY AI", success: true, predictions: {}, message: "Prediction storage is not configured." });
       const rawIds = (url.searchParams.get("fixtureIds") || "").split(",").filter(Boolean);
-      const fixtureIds = [...new Set(rawIds)].filter(id => /^\d+$/.test(id)).slice(0, 80);
+      const fixtureIds = [...new Set(rawIds)].filter(id => /^\d+$/.test(id) || /^openligadb:\d+$/.test(id)).slice(0, 80);
       if (!fixtureIds.length) return reply({ error: "Provide one or more valid fixtureIds." }, 400);
       const entries = await Promise.all(fixtureIds.map(async id => [id, await savedPredictionPayload(env, id)]));
       const predictions = {};
