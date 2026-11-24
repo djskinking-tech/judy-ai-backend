@@ -113,7 +113,64 @@
     if (hit === false) return label + ': LOST';
     return label + ': PENDING';
   }
+
   let allRecords = [];
+  const dailyReportList = document.getElementById("daily-report-list");
+  const dailyReportStatus = document.getElementById("daily-report-status");
+  function reportDateKey(date, offset) {
+    const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"Africa/Nairobi",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
+    const values = {};
+    parts.forEach(function(part){values[part.type]=part.value;});
+    const shifted = new Date(Date.UTC(Number(values.year),Number(values.month)-1,Number(values.day)+(offset||0)));
+    return shifted.toISOString().slice(0,10);
+  }
+  function reportOptions(record, period) {
+    const block = record.predictions && record.predictions[period];
+    return block && Array.isArray(block.options) ? block.options.slice(0,2) : [];
+  }
+  function reportScore(options) {
+    if (!options.length) return "Not available";
+    return options.map(function(option,index) {
+      const probability = Number(option.probability);
+      return (index+1)+". "+String(option.score||"—")+(Number.isFinite(probability)?" · "+probability+"%":"");
+    }).join("  |  ");
+  }
+  function renderDailyReport(items) {
+    if (!dailyReportList) return;
+    const now = Date.now();
+    const today = reportDateKey(new Date(),0), tomorrow = reportDateKey(new Date(),1);
+    const dayFilter = document.getElementById("daily-report-date")?.value || "all";
+    const query = (document.getElementById("daily-report-search")?.value || "").trim().toLowerCase();
+    const upcoming = (Array.isArray(items)?items:[]).map(function(record) {
+      const fixture = record.fixture || {};
+      const rawKickoff = String(fixture.startingAt || "");
+      const kickoff = new Date(rawKickoff.replace(" ","T") + (rawKickoff.endsWith("Z")?"":"Z"));
+      const ht = reportOptions(record,"halfTime"), ft = reportOptions(record,"fullTime");
+      const probabilities = [ht[0] && Number(ht[0].probability), ft[0] && Number(ft[0].probability)].filter(Number.isFinite);
+      const rank = probabilities.length ? probabilities.reduce(function(a,b){return a+b;},0)/probabilities.length : -1;
+      const dateKey = Number.isFinite(kickoff.getTime()) ? reportDateKey(kickoff,0) : "";
+      return {record:record,fixture:fixture,kickoff:kickoff,ht:ht,ft:ft,rank:rank,dateKey:dateKey};
+    }).filter(function(item) {
+      if (item.record.status==="completed" || !Number.isFinite(item.kickoff.getTime()) || item.kickoff.getTime()<=now || !item.ht.length || !item.ft.length || item.rank<0) return false;
+      if (dayFilter==="today" && item.dateKey!==today) return false;
+      if (dayFilter==="tomorrow" && item.dateKey!==tomorrow) return false;
+      const searchable=[item.fixture.name,item.fixture.homeTeam,item.fixture.awayTeam,item.fixture.league].filter(Boolean).join(" ").toLowerCase();
+      return !query || searchable.includes(query);
+    }).sort(function(a,b){return b.rank-a.rank || a.kickoff-b.kickoff;});
+    if (dailyReportStatus) dailyReportStatus.textContent = upcoming.length+" upcoming match"+(upcoming.length===1?"":"es")+" with saved HT and FT predictions · ranked by mean top-score probability.";
+    if (!upcoming.length) {
+      dailyReportList.innerHTML='<div class="daily-report-empty">No upcoming saved predictions match this view yet. JUDY AI will list a match here after its pre-kick-off prediction has been saved.</div>';
+      return;
+    }
+    dailyReportList.innerHTML=upcoming.map(function(item,index) {
+      const fixture=item.fixture;
+      const name=fixture.name||((fixture.homeTeam||"Home")+" vs "+(fixture.awayTeam||"Away"));
+      const kickoff=new Intl.DateTimeFormat("en-KE",{timeZone:"Africa/Nairobi",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true}).format(item.kickoff)+" EAT";
+      const quality=item.record.confidence||"Not recorded";
+      return '<article class="daily-report-card"><div class="daily-report-card-head"><span class="daily-report-rank">#'+(index+1)+'</span><div class="daily-report-match"><strong>'+escapeHtml(name)+'</strong><small>'+escapeHtml(fixture.league||"League not recorded")+' · '+escapeHtml(kickoff)+'</small></div><b class="daily-report-prob">'+item.rank.toFixed(1)+'%<small>mean top score</small></b></div><div class="daily-report-scores"><div><span>HALF-TIME · TOP 2</span><strong>'+escapeHtml(reportScore(item.ht))+'</strong></div><div><span>FULL-TIME · TOP 2</span><strong>'+escapeHtml(reportScore(item.ft))+'</strong></div></div><div class="daily-report-meta"><span>Recorded confidence: '+escapeHtml(quality)+'</span><span>Pre-kick-off saved prediction</span></div></article>';
+    }).join("");
+  }
+
   function renderRecords(items) {
     allRecords = Array.isArray(items) ? items : [];
     const query = (document.getElementById("performance-search")?.value || "").trim().toLowerCase();
@@ -185,6 +242,7 @@
       renderRecords(Array.isArray(payload.records) ? payload.records : []);
       renderAccuracyCentre(Array.isArray(payload.records) ? payload.records : []);
       renderConfidenceCentre(Array.isArray(payload.records) ? payload.records : []);
+      renderDailyReport(Array.isArray(payload.records) ? payload.records : []);
       status.textContent = "Updated " + new Intl.DateTimeFormat("en-KE", {
         timeZone:"Africa/Nairobi", hour:"2-digit", minute:"2-digit", hour12:true
       }).format(new Date()) + " EAT · " + completed + " completed, " + pending + " pending.";
@@ -199,6 +257,11 @@
     }
   }
   refreshButton.addEventListener("click", loadPerformance);
+  const dailyDate=document.getElementById("daily-report-date"), dailySearch=document.getElementById("daily-report-search");
+  if(dailyDate) dailyDate.addEventListener("change",function(){renderDailyReport(allRecords);});
+  if(dailySearch) dailySearch.addEventListener("input",function(){renderDailyReport(allRecords);});
+  const dailyRefresh=document.getElementById("refresh-daily-report");
+  if(dailyRefresh) dailyRefresh.addEventListener("click",loadPerformance);
   const performanceSearch = document.getElementById("performance-search");
   if (performanceSearch) performanceSearch.addEventListener("input", function () { renderRecords(allRecords); });
   loadPerformance();
