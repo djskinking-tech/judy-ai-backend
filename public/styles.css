@@ -210,3 +210,30 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .fixture-source-note.source-note-warning{border-color:#8b6a35;background:rgba(139,106,53,.12);color:#f1d7a5}
 .fixture-source-note[hidden]{display:none}
 .fixture-data-note{margin:10px 0 0;padding:7px 9px;border-left:2px solid #7b9fc4;background:rgba(123,159,196,.08);color:var(--muted);font-size:10px;line-height:1.4}
+
+
+/* Persistent original prediction archive, independent of live fixture feeds */
+.saved-predictions-section{margin:28px 0 36px;padding:21px;border:1px solid #345044;border-radius:18px;background:linear-gradient(145deg,#10241f,#0d1a29)}
+.saved-predictions-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.saved-predictions-heading h2{font-size:24px}
+.saved-predictions-heading p:last-child{max-width:650px;color:var(--muted);font-size:11px;line-height:1.6;margin:8px 0 0}
+.saved-predictions-status{color:#9fb2c7;font-size:10px;margin:14px 0}
+.saved-prediction-list{display:grid;gap:11px}
+.saved-prediction-card{padding:15px;border:1px solid #2a473e;border-radius:13px;background:#0b1918}
+.saved-prediction-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.saved-prediction-card-head>div{min-width:0}
+.saved-prediction-card-head strong,.saved-prediction-card-head span{display:block}
+.saved-prediction-card-head strong{font-size:13px;overflow-wrap:anywhere}
+.saved-prediction-card-head span{font-size:9px;color:var(--muted);margin-top:5px}
+.saved-prediction-card-head>b{font-size:8px;letter-spacing:.8px;white-space:nowrap}
+.saved-pending{color:#f1c98a}.saved-finished{color:var(--green)}
+.saved-prediction-periods{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}
+.saved-prediction-periods>div{padding:11px;border:1px solid #263d53;border-radius:10px;background:#101f2b;min-width:0}
+.saved-prediction-periods span,.saved-prediction-periods strong,.saved-prediction-periods small{display:block}
+.saved-prediction-periods span{font-size:8px;letter-spacing:.8px;color:var(--green);font-weight:850}
+.saved-prediction-periods strong{font-size:11px;line-height:1.6;margin-top:7px;overflow-wrap:anywhere}
+.saved-prediction-periods small{font-size:9px;color:var(--muted);line-height:1.5;margin-top:7px}
+.saved-prediction-lock{margin-top:10px;color:#8fa2b8;font-size:9px;line-height:1.5}
+.saved-prediction-empty{padding:18px;border:1px dashed #345044;border-radius:11px;color:var(--muted);font-size:11px;line-height:1.6}
+#saved-predictions-center{scroll-margin-top:82px}
+@media(max-width:680px){.saved-predictions-section{padding:15px}.saved-predictions-heading{align-items:flex-start;flex-direction:column}.saved-predictions-heading .secondary-button{width:100%}.saved-prediction-periods{grid-template-columns:1fr}.saved-prediction-card-head{flex-direction:column}}
