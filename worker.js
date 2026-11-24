@@ -1362,6 +1362,20 @@ export default {
       if (/^openligadb:\d+$/.test(fixtureId)) {
         try {
           const saved = await savedPredictionPayload(env, fixtureId);
+          if (saved && saved.fixture) {
+            const savedKickoff = new Date(String(saved.fixture.startingAt || "").replace(" ", "T"));
+            const savedDate = Number.isNaN(savedKickoff.getTime()) ? "" :
+              new Date(savedKickoff.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            const savedCorrection = verifiedOpenLigaCorrection(savedDate, saved.fixture.homeTeam);
+            if (savedCorrection && String(saved.fixture.awayTeam || "") !== savedCorrection.awayTeam) {
+              return reply({
+                app: "JUDY AI", success: false, status: "fixture_mapping_conflict",
+                error: "Saved prediction withheld: its original fixture teams conflict with the verified fixture. JUDY will not display a prediction for the wrong opponent.",
+                fixtureId, savedHome: saved.fixture.homeTeam, savedAway: saved.fixture.awayTeam,
+                verifiedAway: savedCorrection.awayTeam, source: "OpenLigaDB"
+              }, 409);
+            }
+          }
           if (saved) return reply(saved);
           const matchId = fixtureId.split(":")[1];
           const fixtureResponse = await fetch("https://api.openligadb.de/getmatchdata/" + matchId, {
