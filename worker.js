@@ -1666,11 +1666,12 @@ export default {
         const leagues = [
           { shortcut: "pl", name: "Premier League", country: "England" },
           { shortcut: "la1", name: "LaLiga", country: "Spain" },
-          { shortcut: "bl1", name: "Bundesliga", country: "Germany" }
+          { shortcut: "bl1", name: "Bundesliga", country: "Germany" },
+          { shortcut: "ucl", name: "UEFA Champions League", country: "Europe" }
         ];
-        // OpenLigaDB is community-maintained. Do not assume every league
-        // shortcut is authoritative; omit unverified long-tail competitions
-        // rather than presenting potentially incorrect fixtures as confirmed.
+        // OpenLigaDB is community-maintained. Keep its Champions League
+        // schedule as a clearly labelled community-source feed; users should
+        // verify fixture details against official competition information.
         const kickoffFormatter = new Intl.DateTimeFormat("en-CA", {
           timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit"
         });
@@ -1725,7 +1726,7 @@ export default {
         if (matches.length) {
           fixtureSource = "OpenLigaDB";
           source = "openligadb_fallback";
-          fallbackNote = "Free community fixture source. Coverage is limited to the Premier League, LaLiga and Bundesliga; community data may be incomplete. Predictions and bookmaker odds are disabled because these IDs are not Sportmonks fixture IDs.";
+          fallbackNote = "Free community fixture source covering selected competitions including the Champions League. Community data may be incomplete and should be verified. Predictions and bookmaker odds are disabled because these IDs are not Sportmonks fixture IDs.";
         }
       }
 
