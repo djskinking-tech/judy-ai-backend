@@ -593,7 +593,7 @@ function renderMatchIntelligencePanel(panel, fixtureId) {
   panel.innerHTML = '<div class="match-intelligence-stack">' +
     (history || '<section class="h2h-history"><h4>HEAD-TO-HEAD</h4><p>Verified previous meetings are not available yet.</p></section>') +
     '<div class="match-intelligence-heading"><span>TEAM NEWS & MATCH INTELLIGENCE</span><small>Verified information only</small></div>' +
-    player + form + quality +
+    player + clubPlayerSpotlightMarkup(saved.playerWatch) + form + quality +
     '<p class="match-intelligence-footnote">Unavailable data is marked clearly; it is never treated as confirmation that a player is fit or available.</p>' +
     '</div>';
 }
@@ -670,6 +670,39 @@ function playerWatchMarkup(data) {
     escapeHtml(impact.reason || "No verified player impact assessment is available.") +
     '</p></div><small>Source: ' + escapeHtml(data.source || "Not supplied") +
     '. Only provider-listed information is shown; missing information is never guessed.</small></section>';
+}
+function clubPlayerSpotlightMarkup(data) {
+  const source = data || {};
+  const watch = source.playersToWatch || source.watchList || source.players_to_watch || {};
+  const best = source.bestPlayers || source.topPlayers || source.best_players || {};
+  function rowsFor(group, side) {
+    if (Array.isArray(group)) return group;
+    if (group && Array.isArray(group[side])) return group[side];
+    return [];
+  }
+  function playerRows(rows) {
+    if (!rows.length) return '<p class="club-player-empty">Player profiles or performance rankings have not been supplied by the data provider yet.</p>';
+    return '<ul>' + rows.slice(0, 5).map(function (player) {
+      const name = player.name || player.player || player.displayName || player.display_name || "Player name unavailable";
+      const position = player.position || player.positionName || player.position_name || "";
+      const detail = player.reason || player.why || player.highlight || player.ratingLabel || player.rating_label || "";
+      const stats = [player.rating != null ? "Rating " + player.rating : "", player.goals != null ? player.goals + " goals" : "", player.assists != null ? player.assists + " assists" : ""].filter(Boolean).join(" · ");
+      return '<li><strong>' + escapeHtml(name) + '</strong>' +
+        (position ? '<span>' + escapeHtml(position) + '</span>' : '') +
+        (detail ? '<small>' + escapeHtml(detail) + '</small>' : '') +
+        (stats ? '<small>' + escapeHtml(stats) + '</small>' : '') + '</li>';
+    }).join('') + '</ul>';
+  }
+  function teamCard(title, group, side) {
+    return '<div class="club-player-team"><strong>' + title + '</strong>' +
+      '<div class="club-player-columns"><section><b>HOME CLUB</b>' + playerRows(rowsFor(group, "home")) +
+      '</section><section><b>AWAY CLUB</b>' + playerRows(rowsFor(group, "away")) + '</section></div></div>';
+  }
+  return '<section class="club-player-spotlight"><h4>⭐ PLAYERS TO WATCH</h4>' +
+    teamCard("Match impact candidates", watch) +
+    '<h4>🏆 BEST PLAYERS AT EACH CLUB</h4>' +
+    teamCard("Club performance leaders", best) +
+    '<small>Rankings require verified player profiles or season statistics. Missing player data is not guessed.</small></section>';
 }
 function dataQualityMarkup(data) {
   if (!data) return '<section class="data-quality"><h4>DATA QUALITY</h4><p>Quality report unavailable for this saved prediction.</p></section>';
