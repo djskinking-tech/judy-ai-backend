@@ -277,7 +277,7 @@ async function loadFixtureOdds(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("odds-" + fixtureId);
   if (!panel || !(/^openligadb:\d+$/.test(fixtureId || "") || /^\d+$/.test(fixtureId || ""))) return;
-  if (/^openligadb:\\d+$/.test(fixtureId || "")) {
+  if (/^openligadb:\d+$/.test(fixtureId || "")) {
     if (panel.dataset.loaded === "true") {
       panel.hidden = !panel.hidden;
       button.textContent = panel.hidden ? "Show odds" : "Hide odds";
@@ -316,7 +316,7 @@ async function loadFixtureOdds(button) {
 async function loadHeadToHead(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("h2h-" + fixtureId);
-  if (!panel || !(/^openligadb:\\d+$/.test(fixtureId || "") || /^\\d+$/.test(fixtureId || ""))) return;
+  if (!panel || !(/^openligadb:\d+$/.test(fixtureId || "") || /^\d+$/.test(fixtureId || ""))) return;
   if (panel.dataset.loaded === "true") {
     panel.hidden = !panel.hidden;
     button.textContent = panel.hidden ? "Head to head" : "Hide H2H";
