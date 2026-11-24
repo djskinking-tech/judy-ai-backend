@@ -1576,7 +1576,7 @@ export default {
 
     const cache = caches.default;
     // v5 invalidates stale cached responses from earlier fallback deployments.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v6/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v7/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -1760,8 +1760,104 @@ export default {
         }
       }
 
-      // Free fallback 2: TheSportsDB can supply a small fixture list when
-      // Sportmonks and OpenLigaDB have no matching fixtures for this date.
+      // Free fallback 2: OpenFootball publishes public-domain JSON schedules
+      // without API keys. Merge only fixtures missing from the current free
+      // fallback set; never convert these IDs into Sportmonks prediction IDs.
+      const openFootballDiagnostics = [];
+      if (fixtureSource !== "Sportmonks" || !matches.length) {
+        const seasonFolder = season + "-" + String(season + 1).slice(-2);
+        const competitions = [
+          { code: "en.1", name: "Premier League", country: "England" },
+          { code: "de.1", name: "Bundesliga", country: "Germany" },
+          { code: "es.1", name: "La Liga", country: "Spain" },
+          { code: "it.1", name: "Serie A", country: "Italy" },
+          { code: "fr.1", name: "Ligue 1", country: "France" },
+          { code: "nl.1", name: "Eredivisie", country: "Netherlands" },
+          { code: "pt.1", name: "Primeira Liga", country: "Portugal" }
+        ];
+        const normaliseTeam = value => String(value || "")
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase().replace(/\b(fc|cf|afc|sc|ac)\b/g, "")
+          .replace(/[^a-z0-9]/g, "");
+        const knownFixtures = new Set(matches.map(match =>
+          date + "|" + normaliseTeam(match.homeTeam) + "|" + normaliseTeam(match.awayTeam)
+        ));
+        for (const competition of competitions) {
+          try {
+            const cacheKey = new Request("https://judy-ai-cache.example/openfootball/" + seasonFolder + "/" + competition.code);
+            const cached = await caches.default.match(cacheKey);
+            let rows = [];
+            let httpStatus = null;
+            let cacheHit = false;
+            if (cached) {
+              cacheHit = true;
+              const cachedBody = await cached.json();
+              rows = Array.isArray(cachedBody) ? cachedBody : [];
+            } else {
+              const apiUrl = "https://raw.githubusercontent.com/openfootball/football.json/master/" + seasonFolder + "/" + competition.code + ".json";
+              const upstream = await fetch(apiUrl, { headers: { "Accept": "application/json" } });
+              httpStatus = upstream.status;
+              if (upstream.ok) {
+                const body = await upstream.json();
+                rows = body && Array.isArray(body.matches) ? body.matches : [];
+                await caches.default.put(cacheKey, new Response(JSON.stringify(rows), {
+                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }
+                }));
+              }
+            }
+            let dateMatches = 0;
+            for (let index = 0; index < rows.length; index++) {
+              const row = rows[index];
+              if (!row || row.date !== date || !row.team1 || !row.team2) continue;
+              dateMatches++;
+              const homeKey = normaliseTeam(row.team1);
+              const awayKey = normaliseTeam(row.team2);
+              const dedupeKey = date + "|" + homeKey + "|" + awayKey;
+              if (knownFixtures.has(dedupeKey)) continue;
+              knownFixtures.add(dedupeKey);
+              const hasFullTimeScore = Boolean(row.score && Array.isArray(row.score.ft));
+              const timeText = row.time
+                ? String(row.time).slice(0, 5) + " (provider local; timezone unverified)"
+                : "Kick-off time TBC";
+              matches.push({
+                id: "openfootball:" + competition.code + ":" + date + ":" + index,
+                fixtureSource: "OpenFootball",
+                predictionsSupported: false,
+                date,
+                kickoffLabel: timeText,
+                homeTeam: row.team1,
+                awayTeam: row.team2,
+                league: { name: competition.name },
+                country: competition.country,
+                status: hasFullTimeScore ? "Finished" : "Scheduled"
+              });
+            }
+            openFootballDiagnostics.push({
+              competition: competition.code,
+              httpStatus,
+              cacheHit,
+              rows: rows.length,
+              matchesForRequestedDate: dateMatches
+            });
+          } catch (openFootballError) {
+            openFootballDiagnostics.push({
+              competition: competition.code,
+              error: openFootballError && openFootballError.message ? openFootballError.message : String(openFootballError)
+            });
+          }
+        }
+        const openFootballCount = matches.filter(match => match.fixtureSource === "OpenFootball").length;
+        if (openFootballCount) {
+          const hasOpenLiga = matches.some(match => match.fixtureSource === "OpenLigaDB");
+          fixtureSource = hasOpenLiga ? "OpenLigaDB + OpenFootball" : "OpenFootball";
+          source = hasOpenLiga ? "combined_free_fallback" : "openfootball_fallback";
+          fallbackNote = (fallbackNote ? fallbackNote + " " : "") +
+            "Also includes OpenFootball public-domain schedules for selected European leagues. Coverage may be incomplete; kickoff timezone is not supplied by this source. Predictions and bookmaker odds are disabled for these fixtures.";
+        }
+      }
+
+      // Free fallback 3: TheSportsDB can supply a small fixture list when
+      // all earlier sources have no matching fixtures for this date.
       // Its event IDs are not Sportmonks fixture IDs, so predictions and
       // bookmaker odds must remain disabled for these rows.
       if (!matches.length) {
@@ -1815,6 +1911,7 @@ export default {
         fallbackDatesChecked,
         fallbackNote,
         openLigaDiagnostics,
+        openFootballDiagnostics,
         predictionsSupported: fixtureSource === "Sportmonks",
         pagination: {
           pages_fetched: primary.pagesFetched,
