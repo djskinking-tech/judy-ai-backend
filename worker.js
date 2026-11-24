@@ -1569,7 +1569,7 @@ export default {
       }
 
       try {
-        const target = await sportmonks("fixtures/" + fixtureId, { include: "participants;league;sidelined.player;sidelined.type;lineups.player;lineups.type;lineups.position" });
+        const target = await sportmonks("fixtures/" + fixtureId, { include: "participants;league;metadata;sidelined.player;sidelined.type;lineups.player;lineups.type;lineups.position" });
         if (!target || !Array.isArray(target.participants)) {
           return reply({ error: "Fixture or participant data was not found." }, 404);
         }
@@ -1727,7 +1727,7 @@ export default {
         const lineupRows = Array.isArray(target.lineups) ? target.lineups : [];
         const playerLabel = row => (row.player && (row.player.display_name || row.player.common_name || row.player.name)) || row.player_name || "Name unavailable";
         const absenceCategory = row => {
-          const reason = String(row.type && (row.type.name || row.type.code) || "").toLowerCase();
+          const reason = String((row.type && (row.type.name || row.type.code)) || row.category || (row.sideline && (row.sideline.name || row.sideline.category)) || "").toLowerCase();
           if (/injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle/.test(reason)) return "Injury";
           if (/suspend|red card|yellow card|disciplin/.test(reason)) return "Suspension";
           if (/ill|sick|virus/.test(reason)) return "Illness";
@@ -1738,7 +1738,17 @@ export default {
         };
         const teamNameFor = teamId => Number(teamId) === Number(homeTeam.id) ? homeTeam.name :
           Number(teamId) === Number(awayTeam.id) ? awayTeam.name : "Team not identified";
-        const confirmed = !!(target.metadata && target.metadata.lineup_confirmed === true);
+        const metadataRows = Array.isArray(target.metadata) ? target.metadata : [];
+        const lineupMetadata = metadataRows.find(row => {
+          const type = row && row.type || {};
+          return Number(row && row.type_id) === 572 ||
+            /lineup.?confirmed/i.test([type.name, type.code, type.developer_name].filter(Boolean).join(" "));
+        });
+        const lineupMetadataValue = lineupMetadata && (lineupMetadata.values !== undefined ? lineupMetadata.values : lineupMetadata.value);
+        const confirmed = lineupMetadata
+          ? (lineupMetadataValue === true || (lineupMetadataValue && typeof lineupMetadataValue === "object" &&
+              (lineupMetadataValue.lineup_confirmed === true || lineupMetadataValue.value === true || lineupMetadataValue.confirmed === true)))
+          : !!(target.metadata && !Array.isArray(target.metadata) && target.metadata.lineup_confirmed === true);
         const playerWatch = {
           status: activeAbsences.length || lineupRows.length ? "available" : "limited",
           absences: activeAbsences.map(row => ({
