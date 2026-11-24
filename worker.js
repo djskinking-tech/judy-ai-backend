@@ -1576,7 +1576,7 @@ export default {
 
     const cache = caches.default;
     // v5 invalidates stale cached responses from earlier fallback deployments.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v5/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v6/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
