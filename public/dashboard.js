@@ -65,6 +65,49 @@
     }));
   }
 
+
+  function confidenceCalibration(rows, model, period) {
+    const buckets=[
+      {label:"Below 10%",min:0,max:10},
+      {label:"10–14.9%",min:10,max:15},
+      {label:"15–19.9%",min:15,max:20},
+      {label:"20% and above",min:20,max:101}
+    ];
+    const samples=[];
+    rows.forEach(function(item){
+      const prediction=(model==="v1"?item.baselineV1:item.predictions)||{};
+      const block=prediction[period];
+      const evaluation=item.evaluation&&item.evaluation[model]&&item.evaluation[model][period];
+      const first=block&&Array.isArray(block.options)?block.options[0]:null;
+      const probability=first&&Number(first.probability);
+      if(!evaluation||typeof evaluation.exact!=="boolean"||!Number.isFinite(probability))return;
+      samples.push({probability:probability,hit:evaluation.exact});
+    });
+    return buckets.map(function(bucket){
+      const subset=samples.filter(function(sample){return sample.probability>=bucket.min&&sample.probability<bucket.max;});
+      const hits=subset.filter(function(sample){return sample.hit;}).length;
+      return {label:bucket.label,total:subset.length,hits:hits,rate:subset.length?(hits/subset.length*100).toFixed(1):"—"};
+    }).filter(function(bucket){return bucket.total>0;});
+  }
+  function renderCalibration(node, rows, model, period) {
+    if(!node)return;
+    const buckets=confidenceCalibration(rows,model,period);
+    if(!buckets.length){node.innerHTML='<p class="confidence-empty">Not enough evaluated probability data yet.</p>';return;}
+    node.innerHTML='<div class="confidence-table"><div class="confidence-table-head"><span>Top-score probability</span><span>Exact hits</span><span>Observed rate</span></div>'+
+      buckets.map(function(bucket){return '<div class="confidence-table-row"><span>'+escapeHtml(bucket.label)+'</span><strong>'+bucket.hits+'/'+bucket.total+'</strong><b>'+bucket.rate+'%</b></div>';}).join("")+'</div>';
+  }
+  function renderConfidenceCentre(items){
+    const completed=items.filter(function(item){return item.status==="completed";});
+    const summary=document.getElementById("confidence-summary");
+    if(!summary)return;
+    summary.innerHTML='<div class="confidence-summary-card"><span>Completed records available</span><strong>'+completed.length+'</strong></div>'+
+      '<p>Observed exact-hit rates are descriptive, not guarantees. Each band needs more matches before it can support a reliable conclusion.</p>';
+    renderCalibration(document.getElementById("confidence-current-ht"),completed,"v2_1","halfTime");
+    renderCalibration(document.getElementById("confidence-current-ft"),completed,"v2_1","fullTime");
+    renderCalibration(document.getElementById("confidence-v1-ht"),completed,"v1","halfTime");
+    renderCalibration(document.getElementById("confidence-v1-ft"),completed,"v1","fullTime");
+  }
+
   function hitLabel(label, hit) {
     if (hit === true) return label + ': WON';
     if (hit === false) return label + ': LOST';
@@ -141,6 +184,7 @@
         renderModel("V2.1 experimental", metrics.v2_1 || {});
       renderRecords(Array.isArray(payload.records) ? payload.records : []);
       renderAccuracyCentre(Array.isArray(payload.records) ? payload.records : []);
+      renderConfidenceCentre(Array.isArray(payload.records) ? payload.records : []);
       status.textContent = "Updated " + new Intl.DateTimeFormat("en-KE", {
         timeZone:"Africa/Nairobi", hour:"2-digit", minute:"2-digit", hour12:true
       }).format(new Date()) + " EAT · " + completed + " completed, " + pending + " pending.";
