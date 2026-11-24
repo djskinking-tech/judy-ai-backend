@@ -1370,7 +1370,7 @@ export default {
     if (url.pathname === "/api/highlightly-diagnostics") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       const date = url.searchParams.get("date");
-      if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return reply({ app: "JUDY AI", success: false, error: "Date must use YYYY-MM-DD format" }, 400);
       }
       if (!env.HIGHLIGHTLY_API_KEY) {
@@ -1402,8 +1402,8 @@ export default {
           }, 502);
         }
         const rows = Array.isArray(body) ? body :
-          (Array.isArray(body.data) ? body.data :
-          (Array.isArray(body.matches) ? body.matches : []));
+          (body && Array.isArray(body.data) ? body.data :
+          (body && Array.isArray(body.matches) ? body.matches : []));
         const sample = rows.slice(0, 3).map(match => ({
           id: match.id || match.matchId || null,
           keys: Object.keys(match || {}).slice(0, 25),
