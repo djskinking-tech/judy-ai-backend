@@ -1670,6 +1670,51 @@ export default {
           { shortcut: "bl1", name: "Bundesliga", country: "Germany" },
           { shortcut: "ucl", name: "UEFA Champions League", country: "Europe" }
         ];
+        // Discover additional competitions from OpenLigaDB instead of guessing
+        // shortcuts. Cache the season catalogue for 24 hours and limit requests.
+        let openLigaCatalogueDiagnostics = { httpStatus: null, cacheHit: false, discovered: 0, added: 0 };
+        try {
+          const catalogueKey = new Request("https://judy-ai-cache.example/openligadb/available/" + season);
+          const cachedCatalogue = await caches.default.match(catalogueKey);
+          let availableLeagues = [];
+          if (cachedCatalogue) {
+            openLigaCatalogueDiagnostics.cacheHit = true;
+            const catalogueBody = await cachedCatalogue.json();
+            availableLeagues = Array.isArray(catalogueBody) ? catalogueBody : [];
+          } else {
+            const catalogueResponse = await fetch("https://api.openligadb.de/getavailableleagues/" + season, {
+              headers: { "Accept": "application/json" }
+            });
+            openLigaCatalogueDiagnostics.httpStatus = catalogueResponse.status;
+            if (catalogueResponse.ok) {
+              const catalogueBody = await catalogueResponse.json();
+              availableLeagues = Array.isArray(catalogueBody) ? catalogueBody : [];
+              await caches.default.put(catalogueKey, new Response(JSON.stringify(availableLeagues), {
+                headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }
+              }));
+            }
+          }
+          openLigaCatalogueDiagnostics.discovered = availableLeagues.length;
+          const wantedCompetition = /serie\\s*a|ligue\\s*1|eredivisie|primeira\\s*liga|europa\\s*league|conference\\s*league|championship|scottish\\s*premier|belgian\\s*(pro|first)|super\\s*league|2\\.?\\s*bundesliga|segunda\\s*division|serie\\s*b|ligue\\s*2/i;
+          const existingShortcuts = new Set(leagues.map(item => item.shortcut.toLowerCase()));
+          for (const item of availableLeagues) {
+            const shortcut = String(item && item.leagueShortcut || "").trim();
+            const name = String(item && item.leagueName || "").trim();
+            if (!shortcut || !name || existingShortcuts.has(shortcut.toLowerCase()) || !wantedCompetition.test(name)) continue;
+            const country = /serie\\s*a|serie\\s*b/i.test(name) ? "Italy" :
+              /ligue\\s*1|ligue\\s*2/i.test(name) ? "France" :
+              /eredivisie/i.test(name) ? "Netherlands" :
+              /primeira\\s*liga/i.test(name) ? "Portugal" :
+              /scottish/i.test(name) ? "Scotland" :
+              /belgian/i.test(name) ? "Belgium" : "Europe";
+            leagues.push({ shortcut, name, country });
+            existingShortcuts.add(shortcut.toLowerCase());
+            openLigaCatalogueDiagnostics.added++;
+            if (leagues.length >= 16) break;
+          }
+        } catch (catalogueError) {
+          openLigaCatalogueDiagnostics.error = String(catalogueError && catalogueError.message || catalogueError).slice(0, 180);
+        }
         // OpenLigaDB is community-maintained. Keep its Champions League
         // schedule as a clearly labelled community-source feed; users should
         // verify fixture details against official competition information.
@@ -1913,6 +1958,7 @@ export default {
         fallbackDatesChecked,
         fallbackNote,
         openLigaDiagnostics,
+        openLigaCatalogueDiagnostics,
         openFootballDiagnostics,
         predictionsSupported: fixtureSource === "Sportmonks",
         pagination: {
