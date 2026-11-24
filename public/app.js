@@ -58,6 +58,9 @@ function toggleSettings(open) {
 const savedPredictionList = document.getElementById("saved-prediction-list");
 const savedPredictionsStatus = document.getElementById("saved-predictions-status");
 const refreshSavedPredictionsButton = document.getElementById("refresh-saved-predictions");
+const savedPredictionSearch = document.getElementById("saved-prediction-search");
+const savedPredictionFilter = document.getElementById("saved-prediction-filter");
+let savedPredictionRecords = [];
 let savedPredictionsTimer = null;
 
 function savedPredictionScores(predictions, period) {
@@ -80,11 +83,26 @@ function savedPredictionEvaluation(record, period) {
 }
 function renderSavedPredictions(records) {
   if (!savedPredictionList) return;
-  if (!records.length) {
-    savedPredictionList.innerHTML = '<div class="saved-prediction-empty">No saved predictions yet. Generate predictions for upcoming matches and they will be kept here.</div>';
+  savedPredictionRecords = Array.isArray(records) ? records : [];
+  const query = savedPredictionSearch ? savedPredictionSearch.value.trim().toLowerCase() : "";
+  const filter = savedPredictionFilter ? savedPredictionFilter.value : "all";
+  const visibleRecords = savedPredictionRecords.filter(function (record) {
+    const completed = record.status === "completed";
+    if (filter === "pending" && completed) return false;
+    if (filter === "completed" && !completed) return false;
+    const fixture = record.fixture || {};
+    const searchable = [fixture.name, fixture.homeTeam, fixture.awayTeam, fixture.league, record.fixtureId]
+      .filter(Boolean).join(" ").toLowerCase();
+    return !query || searchable.includes(query);
+  });
+  if (!visibleRecords.length) {
+    const message = savedPredictionRecords.length
+      ? "No saved matches match your search or filter."
+      : "No saved predictions yet. Generate predictions for upcoming matches and they will be kept here.";
+    savedPredictionList.innerHTML = '<div class="saved-prediction-empty">' + escapeHtml(message) + '</div>';
     return;
   }
-  savedPredictionList.innerHTML = records.map(function (record) {
+  savedPredictionList.innerHTML = visibleRecords.map(function (record) {
     const fixture = record.fixture || {};
     const matchName = fixture.name || [fixture.homeTeam, fixture.awayTeam].filter(Boolean).join(" vs ") || ("Match " + (record.fixtureId || ""));
     const completed = record.status === "completed";
@@ -802,6 +820,8 @@ dateInput.addEventListener("change", function () {
 });
 if (refreshLiveScoresButton) refreshLiveScoresButton.addEventListener("click", loadLiveScores);
 if (refreshSavedPredictionsButton) refreshSavedPredictionsButton.addEventListener("click", loadSavedPredictions);
+if (savedPredictionSearch) savedPredictionSearch.addEventListener("input", function () { renderSavedPredictions(savedPredictionRecords); });
+if (savedPredictionFilter) savedPredictionFilter.addEventListener("change", function () { renderSavedPredictions(savedPredictionRecords); });
 loadSavedPredictions();
 savedPredictionsTimer = setInterval(function () {
   if (!document.hidden) loadSavedPredictions();
