@@ -1367,6 +1367,80 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/highlightly-diagnostics") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      const date = url.searchParams.get("date");
+      if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+        return reply({ app: "JUDY AI", success: false, error: "Date must use YYYY-MM-DD format" }, 400);
+      }
+      if (!env.HIGHLIGHTLY_API_KEY) {
+        return reply({
+          app: "JUDY AI",
+          success: false,
+          provider: "Highlightly",
+          configured: false,
+          message: "HIGHLIGHTLY_API_KEY is not configured in the Worker environment."
+        }, 200);
+      }
+      try {
+        const apiUrl = new URL("https://soccer.highlightly.net/matches");
+        apiUrl.searchParams.set("date", date);
+        apiUrl.searchParams.set("timezone", "Africa/Nairobi");
+        apiUrl.searchParams.set("limit", "50");
+        apiUrl.searchParams.set("offset", "0");
+        const upstream = await fetch(apiUrl.toString(), {
+          headers: { "x-rapidapi-key": env.HIGHLIGHTLY_API_KEY, "Accept": "application/json" }
+        });
+        const raw = await upstream.text();
+        let body;
+        try { body = JSON.parse(raw); }
+        catch {
+          return reply({
+            app: "JUDY AI", success: false, provider: "Highlightly",
+            configured: true, providerStatus: upstream.status,
+            message: "Highlightly returned an unreadable response."
+          }, 502);
+        }
+        const rows = Array.isArray(body) ? body :
+          (Array.isArray(body.data) ? body.data :
+          (Array.isArray(body.matches) ? body.matches : []));
+        const sample = rows.slice(0, 3).map(match => ({
+          id: match.id || match.matchId || null,
+          keys: Object.keys(match || {}).slice(0, 25),
+          date: match.date || match.startDate || match.startingAt || match.starting_at || null,
+          home: match.homeTeam && (match.homeTeam.name || match.homeTeam) || match.home && (match.home.name || match.home) || null,
+          away: match.awayTeam && (match.awayTeam.name || match.awayTeam) || match.away && (match.away.name || match.away) || null
+        }));
+        return reply({
+          app: "JUDY AI",
+          success: upstream.ok,
+          provider: "Highlightly",
+          configured: true,
+          providerStatus: upstream.status,
+          date,
+          timezone: "Africa/Nairobi",
+          total: rows.length,
+          responseKeys: Object.keys(body || {}),
+          plan: body && body.plan ? body.plan : null,
+          pagination: body && body.pagination ? body.pagination : null,
+          rateLimit: {
+            limit: upstream.headers.get("x-ratelimit-requests-limit"),
+            remaining: upstream.headers.get("x-ratelimit-requests-remaining")
+          },
+          sample,
+          message: upstream.ok
+            ? (rows.length ? "Highlightly returned fixtures for this date." : "Highlightly returned no fixtures for this date.")
+            : "Highlightly rejected the request. Check the key, product subscription and API coverage."
+        }, upstream.ok ? 200 : 502);
+      } catch (error) {
+        return reply({
+          app: "JUDY AI", success: false, provider: "Highlightly",
+          configured: true, message: "Highlightly diagnostic request failed.",
+          details: error && error.message ? error.message : String(error)
+        }, 502);
+      }
+    }
+
     if (url.pathname === "/api/provider-diagnostics") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ success: false, error: "Sportmonks API token is not configured" }, 500);
