@@ -358,3 +358,12 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .player-impact p{margin:5px 0 0;font-size:10px;line-height:1.5}
 .match-intelligence-footnote{margin:0 2px}
 @media(max-width:520px){.match-intelligence-heading{align-items:flex-start;flex-direction:column;gap:3px}}
+
+.absence-group{margin:10px 0;padding:9px 10px;border:1px solid #263b50;border-radius:9px;background:#0d1b2a}
+.absence-group>strong,.lineup-heading strong{display:block;color:#e7eef7;font-size:10px;letter-spacing:.07em}
+.absence-group ul{margin:6px 0 0;padding-left:17px}
+.absence-group li{font-size:10px;line-height:1.5}
+.availability-empty{font-size:10px;color:var(--muted);line-height:1.5}
+.lineup-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:14px}
+.lineup-heading small{font-size:9px;color:var(--muted)}
+.player-watch-teams b{font-size:9px;color:var(--green);letter-spacing:.06em}
