@@ -914,7 +914,7 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId");
-      if (!fixtureId || !/^\\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
+      if (!fixtureId || !/\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
       try {
         // Sportmonks documents both the dedicated pre-match odds endpoint and
         // odds as a fixture include. Try the dedicated feed first, then fallback.
@@ -1535,7 +1535,7 @@ export default {
       }
 
       if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
-      if (!fixtureId || !/^\\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
+      if (!fixtureId || !/\d+$/.test(fixtureId)) return reply({ error: "A valid fixtureId is required" }, 400);
       if (!fixtureId || !/^\d+$/.test(fixtureId)) {
         return reply({ error: "A valid fixtureId is required" }, 400);
       }
