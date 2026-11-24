@@ -590,10 +590,13 @@ function venueAdvantageMarkup(data) {
     if (!p || n(p.matches) === 0) return '<div class="venue-profile-row"><strong>' + label + '</strong><span>No verified matches in this venue sample.</span></div>';
     const m=n(p.matches), w=n(p.wins), d=n(p.draws), l=n(p.losses);
     const record=w==null||d==null||l==null?'W-D-L not supplied':w+'-'+d+'-'+l;
+    const valid=w!=null&&d!=null&&l!=null&&m>0;
+    const pct=value=>valid?Math.round(value/m*100)+'%':'Not supplied';
+    const rates=valid?'Win '+pct(w)+' · Draw '+pct(d)+' · Loss '+pct(l):'Win / Draw / Loss percentages unavailable';
     const pattern=m>=5&&l===0?' · UNBEATEN':m>=5&&w===0?' · NO WINS':m>=5&&l/m>=.6?' · HIGH LOSS RATE':m>=5&&w/m>=.6?' · HIGH WIN RATE':'';
     const gf=n(p.averageGoalsFor), ga=n(p.averageGoalsAgainst);
     const goals=gf==null||ga==null?'':' · Avg goals '+gf.toFixed(2)+' for / '+ga.toFixed(2)+' against';
-    return '<div class="venue-profile-row"><strong>'+label+'</strong><span>'+escapeHtml(record+' · '+m+' matches'+pattern+goals)+'</span></div>';
+    return '<div class="venue-profile-row"><strong>'+label+'</strong><span>'+escapeHtml(record+' · '+m+' matches')+'</span><span class="venue-rate-line">'+escapeHtml(rates)+'</span><span class="venue-profile-pattern">'+escapeHtml(pattern.trim())+'</span><span>'+escapeHtml(goals)+'</span></div>';
   }
   function club(label, team) {
     const p=team.venueProfiles||{};
