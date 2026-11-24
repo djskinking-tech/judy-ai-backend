@@ -421,12 +421,12 @@ function playerWatchMarkup(data) {
   }
   const absenceHtml = absences.length
     ? absences.map(row => '<li><strong>Listed unavailable:</strong> ' + escapeHtml(row.player) + ' — ' + escapeHtml(row.reason) + '</li>').join('')
-    : '<li>No active absences listed by Sportmonks, or data unavailable.</li>';
+    : '<li>Not supplied by the data source for this fixture.</li>';
   return '<section class="player-watch"><h4>PLAYER WATCH</h4><strong>Injuries / suspensions</strong><ul>' + absenceHtml +
-    '</ul><strong>' + escapeHtml(data.lineups && data.lineups.label || "Expected XI") +
+    '</ul><strong>' + escapeHtml(data.lineups && data.lineups.label || "Confirmed / expected lineups") +
     '</strong><div class="player-watch-teams"><div><b>Home team</b><ul>' + list(data.lineups && data.lineups.home || []) +
     '</ul></div><div><b>Away team</b><ul>' + list(data.lineups && data.lineups.away || []) +
-    '</ul></div></div><small>Source: Sportmonks. Absence data is provider-listed; lineups may be unconfirmed. Missing data is shown as unavailable, not guessed.</small></section>';
+    '</ul></div></div><small>Verified player availability and lineups are not available for every fixture. Missing information is shown as unavailable, not guessed.</small></section>';
 }
 function dataQualityMarkup(data) {
   if (!data) return '<section class="data-quality"><h4>DATA QUALITY</h4><p>Quality report unavailable for this saved prediction.</p></section>';
@@ -452,10 +452,10 @@ function teamIntelligenceMarkup(data) {
       team.venueSplit === "away" ? "Away" : "All venues";
     return '<div class="intelligence-team"><strong>' + label + '</strong>' +
       '<span>Recent form: ' + escapeHtml(form) + '</span>' +
-      '<span>W-D-L: ' + escapeHtml(team.wins) + '-' + escapeHtml(team.draws) + '-' + escapeHtml(team.losses) +
-      ' · ' + escapeHtml(venueLabel) + ' sample: ' + escapeHtml(team.venueMatches) + '</span>' +
-      '<span>Avg goals: ' + escapeHtml(team.averageGoalsFor) + ' scored / ' +
-      escapeHtml(team.averageGoalsAgainst) + ' conceded</span></div>';
+      '<span>W-D-L: ' + escapeHtml(team.wins == null || team.draws == null || team.losses == null ? "Not available" : team.wins + "-" + team.draws + "-" + team.losses) +
+      ' · ' + escapeHtml(venueLabel) + ' sample: ' + escapeHtml(team.venueMatches == null ? "Not available" : team.venueMatches) + '</span>' +
+      '<span>Avg goals: ' + escapeHtml(team.averageGoalsFor == null ? "Not available" : team.averageGoalsFor) + ' scored / ' +
+      escapeHtml(team.averageGoalsAgainst == null ? "Not available" : team.averageGoalsAgainst) + ' conceded</span></div>';
   }
   return '<section class="team-intelligence"><h4>TEAM INTELLIGENCE · RECENT FORM</h4>' +
     teamBlock("Home team", data.home) + teamBlock("Away team", data.away) +
