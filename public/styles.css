@@ -405,3 +405,11 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .venue-edge-level span{color:#f0d58b}
 .venue-advantage>small{display:block;margin-top:9px}
 @media(max-width:520px){.venue-advantage-grid{grid-template-columns:1fr}}
+
+.venue-club-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.venue-club-card{display:grid;align-content:start;gap:8px;min-width:0;padding:10px;border:1px solid #29445b;border-radius:9px;background:#0d1b2a}
+.venue-club-card h5{margin:0;color:#e7eef7;font-size:10px;letter-spacing:.04em}
+.venue-profile-row{display:grid;gap:4px;padding-top:7px;border-top:1px solid #263b4d}
+.venue-profile-row strong{font-size:9px;color:var(--green);letter-spacing:.06em}
+.venue-profile-row span{font-size:10px;line-height:1.45;color:var(--text);overflow-wrap:anywhere}
+@media(max-width:520px){.venue-club-grid{grid-template-columns:1fr}}
