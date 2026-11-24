@@ -315,7 +315,7 @@ function renderMatches(matches) {
     const fixtureId = match.id || match.fixture_id || "";
     const isOpenLiga = match.fixtureSource === "OpenLigaDB";
     const supportsPredictions = isOpenLiga || (match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false);
-    const supportsOdds = !isOpenLiga && supportsPredictions && /^\\d+$/.test(String(fixtureId));
+    const supportsOdds = !isOpenLiga && supportsPredictions && /^\d+$/.test(String(fixtureId));
     const actions = supportsPredictions
       ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + '</div>' +
         (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
@@ -337,7 +337,7 @@ function renderMatches(matches) {
   loadSavedPredictions(matches);
 }
 async function loadSavedPredictions(matches) {
-  const ids = matches.filter(function (match) { return match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false; }).map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id); });
+  const ids = matches.filter(function (match) { return match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false; }).map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id) || /^openligadb:\d+$/.test(id); });
   if (!ids.length) return;
   try {
     const response = await fetch("/api/predictions/saved?fixtureIds=" + encodeURIComponent(ids.join(",")), { headers: {"Accept":"application/json"} });
