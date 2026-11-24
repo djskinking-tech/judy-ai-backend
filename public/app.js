@@ -484,8 +484,8 @@ function dataQualityMarkup(data) {
     ? '<ul>' + warnings.map(item => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>'
     : '<p>No major data limitations were flagged by the model.</p>';
   return '<section class="data-quality"><h4>DATA QUALITY · ' + escapeHtml(data.confidenceLevel || 'Unrated') + ' CONFIDENCE</h4>' +
-    '<div class="quality-stats"><span>Recent matches: ' + escapeHtml(recent.home ?? '—') + ' home / ' + escapeHtml(recent.away ?? '—') + ' away</span>' +
-    '<span>First-half samples: ' + escapeHtml(firstHalf.home ?? '—') + ' home / ' + escapeHtml(firstHalf.away ?? '—') + ' away</span>' +
+    '<div class="quality-stats"><span>Recent matches: ' + escapeHtml(recent.home ?? '—') + ' home / ' + escapeHtml(recent.away ?? '—') + ' away (target 10 each)</span>' +
+    '<span>First-half samples: ' + escapeHtml(firstHalf.home ?? '—') + ' home / ' + escapeHtml(firstHalf.away ?? '—') + ' away (target 6 each)</span>' +
     '<span>Home/away venue samples: ' + escapeHtml(venue.homeTeamAtHome ?? '—') + ' / ' + escapeHtml(venue.awayTeamAway ?? '—') + '</span></div>' +
     '<strong>Data limitations</strong>' + warningHtml +
     '<small>These checks describe data coverage, not the chance of winning.</small></section>';
