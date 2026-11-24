@@ -340,3 +340,21 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .odds-chance-highest{border-color:var(--green);background:#123126}
 .odds-chance-highest b,.odds-chance-highest small{color:var(--green)}
 @media(max-width:420px){.odds-chance b{font-size:15px}.odds-chance{padding:7px 3px}}
+
+
+/* Match intelligence grouped beneath Head-to-Head */
+.match-intelligence-stack{display:grid;gap:12px}
+.match-intelligence-stack h4{margin:0 0 10px;color:var(--green);font-size:10px;letter-spacing:.08em}
+.h2h-history,.match-intelligence-stack .player-watch,.match-intelligence-stack .team-intelligence,.match-intelligence-stack .data-quality{margin:0;padding:13px;border:1px solid #29445b;border-radius:12px;background:#0b1724}
+.h2h-history>small,.match-intelligence-footnote{display:block;margin-top:10px;color:var(--muted);font-size:9px;line-height:1.5}
+.match-intelligence-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 2px 0}
+.match-intelligence-heading span{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--green)}
+.match-intelligence-heading small{font-size:9px;color:var(--muted)}
+.player-watch>strong{display:block;margin:10px 0 4px;color:#e7eef7;font-size:11px}
+.player-watch p,.team-intelligence p,.h2h-history p{font-size:11px;color:var(--muted);line-height:1.5}
+.player-watch-teams>div{padding:9px;border:1px solid #263b50;border-radius:9px;background:#0d1b2a}
+.player-impact{margin-top:10px;padding:10px;border-radius:9px;background:#10241f}
+.player-impact strong{font-size:10px;color:var(--green)}
+.player-impact p{margin:5px 0 0;font-size:10px;line-height:1.5}
+.match-intelligence-footnote{margin:0 2px}
+@media(max-width:520px){.match-intelligence-heading{align-items:flex-start;flex-direction:column;gap:3px}}
