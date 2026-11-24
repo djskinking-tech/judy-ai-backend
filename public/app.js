@@ -680,6 +680,11 @@ function clubPlayerSpotlightMarkup(data) {
     if (group && Array.isArray(group[side])) return group[side];
     return [];
   }
+  function explicitYesNo(value) {
+    if (value === true || value === 1 || /^(yes|true|played|available|in squad|selected)$/i.test(String(value || "").trim())) return "Yes";
+    if (value === false || value === 0 || /^(no|false|did not play|not selected|out|not in squad)$/i.test(String(value || "").trim())) return "No";
+    return "Not supplied";
+  }
   function playerRows(rows) {
     if (!rows.length) return '<p class="club-player-empty">Player profiles or performance rankings have not been supplied by the data provider yet.</p>';
     return '<ul>' + rows.slice(0, 5).map(function (player) {
@@ -687,10 +692,24 @@ function clubPlayerSpotlightMarkup(data) {
       const position = player.position || player.positionName || player.position_name || "";
       const detail = player.reason || player.why || player.highlight || player.ratingLabel || player.rating_label || "";
       const stats = [player.rating != null ? "Rating " + player.rating : "", player.goals != null ? player.goals + " goals" : "", player.assists != null ? player.assists + " assists" : ""].filter(Boolean).join(" · ");
+      const last = player.lastMatch || player.last_match || player.previousMatch || player.previous_match || {};
+      const lastFlag = player.playedLastMatch ?? player.played_last_match ?? player.lastMatchPlayed ?? player.last_match_played ?? last.played ?? last.appeared;
+      const lastStatus = explicitYesNo(lastFlag);
+      const lastDetails = [last.date || player.lastMatchDate || player.last_match_date, last.opponent || player.lastOpponent || player.last_opponent, last.minutes != null ? last.minutes + " min" : (player.lastMatchMinutes != null ? player.lastMatchMinutes + " min" : "")].filter(Boolean).join(" · ");
+      const squadFlag = player.isInSquad ?? player.inSquad ?? player.in_squad ?? player.matchdaySquad ?? player.matchday_squad ?? player.selectedForMatch ?? player.selected_for_match;
+      const squadStatus = player.squadStatus || player.squad_status || player.matchdaySquadStatus || player.matchday_squad_status || "";
+      const startingFlag = player.isStarting ?? player.starting ?? player.is_starting ?? player.starting_xi;
+      const substituteFlag = player.isSubstitute ?? player.substitute ?? player.onBench ?? player.on_bench;
+      let squadText = squadStatus ? String(squadStatus) : explicitYesNo(squadFlag);
+      if (/^not supplied$/.test(squadText) && startingFlag != null) squadText = explicitYesNo(startingFlag) === "Yes" ? "Yes — starting XI" : "No — not in starting XI";
+      if (/^not supplied$/.test(squadText) && substituteFlag != null && explicitYesNo(substituteFlag) === "Yes") squadText = "Yes — substitute bench";
       return '<li><strong>' + escapeHtml(name) + '</strong>' +
         (position ? '<span>' + escapeHtml(position) + '</span>' : '') +
         (detail ? '<small>' + escapeHtml(detail) + '</small>' : '') +
-        (stats ? '<small>' + escapeHtml(stats) + '</small>' : '') + '</li>';
+        (stats ? '<small>' + escapeHtml(stats) + '</small>' : '') +
+        '<small class="player-appearance-status">Last match: <b>' + escapeHtml(lastStatus) + '</b>' +
+        (lastDetails ? ' · ' + escapeHtml(lastDetails) : '') + '</small>' +
+        '<small class="player-appearance-status">Today’s squad: <b>' + escapeHtml(squadText) + '</b></small></li>';
     }).join('') + '</ul>';
   }
   function teamCard(title, group, side) {
@@ -702,7 +721,7 @@ function clubPlayerSpotlightMarkup(data) {
     teamCard("Match impact candidates", watch) +
     '<h4>🏆 BEST PLAYERS AT EACH CLUB</h4>' +
     teamCard("Club performance leaders", best) +
-    '<small>Rankings require verified player profiles or season statistics. Missing player data is not guessed.</small></section>';
+    '<small>Last-match status tells whether the player appeared in the club’s previous completed match. Today’s squad status is confirmed only when the provider supplies the matchday squad or starting XI. “Not supplied” means unknown, not No.</small><small>Rankings require verified player profiles or season statistics. Missing player data is not guessed.</small></section>';
 }
 function dataQualityMarkup(data) {
   if (!data) return '<section class="data-quality"><h4>DATA QUALITY</h4><p>Quality report unavailable for this saved prediction.</p></section>';
