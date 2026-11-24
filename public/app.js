@@ -328,6 +328,7 @@ function renderMatches(matches) {
         '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
       '</div>' +
       '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
+      (match.dataNote ? '<p class="fixture-data-note">' + escapeHtml(match.dataNote) + '</p>' : '') +
       actions +
       '</article>';
   }).join("");
@@ -563,7 +564,13 @@ async function loadFixtures() {
     }
     const matches = getMatches(payload);
     renderMatches(matches);
-    caption.textContent = "Fixtures for " + date + (payload.provider === "TheSportsDB" ? " · limited free fallback source" : " · East Africa Time");
+    caption.textContent = "Fixtures for " + date + " · East Africa Time";
+    const sourceNote = document.getElementById("fixture-source-note");
+    if (sourceNote) {
+      sourceNote.hidden = !payload.fallbackNote;
+      sourceNote.textContent = payload.fallbackNote || "";
+      sourceNote.classList.toggle("source-note-warning", Boolean(payload.fallbackNote));
+    }
     if (matches.length) {
       const providerName = payload.provider || "Sportmonks";
       showMessage("Fixtures loaded", "Received " + matches.length + " matches from " + providerName + "." + (payload.fallbackNote ? " " + payload.fallbackNote : ""), "success");
