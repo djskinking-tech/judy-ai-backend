@@ -1575,8 +1575,8 @@ export default {
     }
 
     const cache = caches.default;
-    // v5 invalidates stale cached responses from earlier fallback deployments.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v7/" + date);
+    // v8 invalidates cached responses created before OpenFootball diagnostics were deployed.
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v8/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -1904,6 +1904,7 @@ export default {
       const result = {
         app: "JUDY AI",
         success: true,
+        backendVersion: "openfootball-fallback-v2",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
