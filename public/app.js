@@ -55,6 +55,110 @@ function toggleSettings(open) {
   if (shouldOpen) settingsPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+const savedPredictionList = document.getElementById("saved-prediction-list");
+const savedPredictionsStatus = document.getElementById("saved-predictions-status");
+const refreshSavedPredictionsButton = document.getElementById("refresh-saved-predictions");
+const savedPredictionSearch = document.getElementById("saved-prediction-search");
+const savedPredictionFilter = document.getElementById("saved-prediction-filter");
+let savedPredictionRecords = [];
+let savedPredictionsTimer = null;
+const savedMatchIntelligence = Object.create(null);
+const matchHistoryMarkup = Object.create(null);
+
+function savedPredictionScores(predictions, period) {
+  const options = predictions && predictions[period] && Array.isArray(predictions[period].options)
+    ? predictions[period].options.slice(0, 2) : [];
+  if (!options.length) return "Not available";
+  return options.map(function (option, index) {
+    const score = option.score || "—";
+    const probability = option.probability != null ? " (" + option.probability + "%)" : "";
+    return (index + 1) + ". " + score + probability;
+  }).join("  ·  ");
+}
+function savedPredictionEvaluation(record, period) {
+  const evaluation = record.evaluation || {};
+  const model = evaluation.v2_1 || evaluation.v1 || {};
+  const result = model[period] || {};
+  if (result.topTwo === true) return "WON · top two";
+  if (result.topTwo === false) return "LOST · top two";
+  return "PENDING";
+}
+function renderSavedPredictions(records) {
+  if (!savedPredictionList) return;
+  savedPredictionRecords = Array.isArray(records) ? records : [];
+  const query = savedPredictionSearch ? savedPredictionSearch.value.trim().toLowerCase() : "";
+  const filter = savedPredictionFilter ? savedPredictionFilter.value : "all";
+  const visibleRecords = savedPredictionRecords.filter(function (record) {
+    const completed = record.status === "completed";
+    if (filter === "pending" && completed) return false;
+    if (filter === "completed" && !completed) return false;
+    const fixture = record.fixture || {};
+    const searchable = [fixture.name, fixture.homeTeam, fixture.awayTeam, fixture.league, record.fixtureId]
+      .filter(Boolean).join(" ").toLowerCase();
+    return !query || searchable.includes(query);
+  });
+  if (!visibleRecords.length) {
+    const message = savedPredictionRecords.length
+      ? "No saved matches match your search or filter."
+      : "No saved predictions yet. JUDY AI checks upcoming supported fixtures automatically and saves predictions when available.";
+    savedPredictionList.innerHTML = '<div class="saved-prediction-empty">' + escapeHtml(message) + '</div>';
+    return;
+  }
+  savedPredictionList.innerHTML = visibleRecords.map(function (record) {
+    const fixture = record.fixture || {};
+    const matchName = fixture.name || [fixture.homeTeam, fixture.awayTeam].filter(Boolean).join(" vs ") || ("Match " + (record.fixtureId || ""));
+    const completed = record.status === "completed";
+    const actual = record.actual || {};
+    const htActual = actual.halfTime || "—";
+    const ftActual = actual.fullTime || "—";
+    const htOutcome = savedPredictionEvaluation(record, "halfTime");
+    const ftOutcome = savedPredictionEvaluation(record, "fullTime");
+    const statusLabel = completed ? "FINISHED" : "SAVED · " + (record.status || "PENDING").toUpperCase();
+    const captured = record.capturedAt ? new Date(record.capturedAt) : null;
+    const capturedLabel = captured && !Number.isNaN(captured.getTime())
+      ? new Intl.DateTimeFormat("en-KE", {timeZone:"Africa/Nairobi", day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit"}).format(captured) + " EAT"
+      : "Capture time unavailable";
+    return '<article class="saved-prediction-card">' +
+      '<div class="saved-prediction-card-head"><div><strong>' + escapeHtml(matchName) + '</strong>' +
+      '<span>' + escapeHtml(fixture.league || "League TBC") + ' · ' + escapeHtml(fixture.startingAt || "Kick-off TBC") + '</span></div>' +
+      '<b class="' + (completed ? "saved-finished" : "saved-pending") + '">' + escapeHtml(statusLabel) + '</b></div>' +
+      '<div class="saved-prediction-periods">' +
+      '<div><span>HALF-TIME · ORIGINAL</span><strong>' + escapeHtml(savedPredictionScores(record.predictions, "halfTime")) + '</strong>' +
+      '<small>Actual: ' + escapeHtml(htActual) + ' · ' + escapeHtml(htOutcome) + '</small></div>' +
+      '<div><span>FULL-TIME · ORIGINAL</span><strong>' + escapeHtml(savedPredictionScores(record.predictions, "fullTime")) + '</strong>' +
+      '<small>Actual: ' + escapeHtml(ftActual) + ' · ' + escapeHtml(ftOutcome) + '</small></div></div>' +
+      '<div class="saved-prediction-lock">🔒 Original prediction captured ' + escapeHtml(capturedLabel) + ' · never replaced by live scores</div>' +
+      '</article>';
+  }).join("");
+}
+async function loadSavedPredictions() {
+  if (!savedPredictionList) return;
+  if (refreshSavedPredictionsButton) {
+    refreshSavedPredictionsButton.disabled = true;
+    refreshSavedPredictionsButton.textContent = "Refreshing…";
+  }
+  try {
+    const response = await fetch("/api/tracking", {headers: {"Accept":"application/json"}});
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || "Saved predictions are unavailable.");
+    const records = Array.isArray(payload.records) ? payload.records : [];
+    renderSavedPredictions(records);
+    if (savedPredictionsStatus) {
+      savedPredictionsStatus.textContent = records.length + " saved prediction" + (records.length === 1 ? "" : "s") +
+        " · " + Number(payload.pendingPredictions || 0) + " awaiting results · " +
+        Number(payload.completedPredictions || 0) + " finished";
+    }
+  } catch (error) {
+    if (savedPredictionsStatus) savedPredictionsStatus.textContent = error.message || "Could not load saved predictions.";
+    savedPredictionList.innerHTML = '<div class="saved-prediction-empty">Your saved records could not be reached right now. They have not been deleted. Try refreshing.</div>';
+  } finally {
+    if (refreshSavedPredictionsButton) {
+      refreshSavedPredictionsButton.disabled = false;
+      refreshSavedPredictionsButton.textContent = "Refresh predictions";
+    }
+  }
+}
+
 const liveScoreList = document.getElementById("live-score-list");
 const liveScoreUpdated = document.getElementById("live-score-updated");
 const refreshLiveScoresButton = document.getElementById("refresh-live-scores");
@@ -88,23 +192,50 @@ function liveMinute(match) {
     (eventMinutes.length ? Math.max.apply(null, eventMinutes) : null);
   return minute ? String(minute) + "'" : "";
 }
-function renderLiveScores(matches) {
+function livePredictionForMatch(match, records) {
+  const fixtureId = String(match.id || match.fixture_id || "");
+  const home = liveTeamName(match, "home").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const away = liveTeamName(match, "away").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return records.find(function (record) {
+    const savedId = String(record.fixtureId || record.fixture && record.fixture.id || "");
+    if (fixtureId && savedId && fixtureId === savedId) return true;
+    const savedHome = String(record.fixture && (record.fixture.homeTeam || record.fixture.home || record.fixture.localteam) || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const savedAway = String(record.fixture && (record.fixture.awayTeam || record.fixture.away || record.fixture.visitorteam) || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return home && away && savedHome === home && savedAway === away;
+  }) || null;
+}
+function livePredictionMarkup(record) {
+  if (!record || !record.predictions) return "";
+  function scores(period) {
+    const options = record.predictions[period] && record.predictions[period].options;
+    return Array.isArray(options) && options.length
+      ? options.slice(0, 2).map(function (item) { return escapeHtml(item.score); }).join(" · ")
+      : "Not available";
+  }
+  return '<div class="live-saved-prediction"><strong>JUDY AI ORIGINAL PREDICTION</strong>' +
+    '<span>HT: ' + scores("halfTime") + '</span><span>FT: ' + scores("fullTime") + '</span>' +
+    '<small>Locked before kick-off · ' + (record.status === "completed" ? "Final result recorded" : "Original prediction preserved") + '</small></div>';
+}
+function renderLiveScores(matches, predictionRecords) {
   if (!matches.length) {
     liveScoreList.innerHTML = '<div class="live-empty">No live matches right now. JUDY AI will keep checking automatically.</div>';
     return;
   }
+  const records = Array.isArray(predictionRecords) ? predictionRecords : [];
   liveScoreList.innerHTML = matches.map(function (match) {
     const state = match.state || {};
     const status = state.short_name || state.state || state.name || "LIVE";
     const score = liveScoreFor(match);
     const minute = liveMinute(match);
     const isFinished = ["FT","AET","FT_PEN"].includes(String(status).toUpperCase());
+    const saved = livePredictionForMatch(match, records);
     return '<article class="live-score-card">' +
       '<div class="live-score-status"><span class="' + (isFinished ? "live-dot finished" : "live-dot") + '"></span>' +
       escapeHtml(String(status).toUpperCase()) + (minute && !isFinished ? ' · ' + escapeHtml(minute) : '') + '</div>' +
       '<div class="live-score-teams"><span>' + escapeHtml(liveTeamName(match,"home")) + '</span><strong>' + escapeHtml(score) + '</strong><span>' +
       escapeHtml(liveTeamName(match,"away")) + '</span></div>' +
       '<div class="live-score-league">' + escapeHtml(match.league && match.league.name || "Football") + '</div>' +
+      livePredictionMarkup(saved) +
       '</article>';
   }).join("");
 }
@@ -114,7 +245,17 @@ async function loadLiveScores() {
     const response = await fetch("/api/live-scores", { headers: {"Accept":"application/json"} });
     const payload = await response.json();
     if (!response.ok || !payload.success) throw new Error(payload.error || "Live scores unavailable.");
-    renderLiveScores(Array.isArray(payload.matches) ? payload.matches : []);
+    let predictionRecords = [];
+    try {
+      const trackingResponse = await fetch("/api/tracking", { headers: {"Accept":"application/json"} });
+      const trackingPayload = await trackingResponse.json();
+      if (trackingResponse.ok && trackingPayload.success && Array.isArray(trackingPayload.records)) {
+        predictionRecords = trackingPayload.records;
+      }
+    } catch (trackingError) {
+      console.warn("Saved predictions could not be attached to live scores:", trackingError);
+    }
+    renderLiveScores(Array.isArray(payload.matches) ? payload.matches : [], predictionRecords);
     liveScoreUpdated.textContent = "Updated " + new Intl.DateTimeFormat("en-KE", {
       timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", second: "2-digit"
     }).format(new Date(payload.updatedAt || Date.now())) + " EAT · refreshes every 30 seconds";
@@ -262,9 +403,28 @@ function renderOddsMarkup(payload) {
     const bttsRows = bookmakerRows.filter(function (row) { return oddsMarketType(row) === "btts"; });
     function price(group, key) {
       const row = oddsOutcome(group, key);
-      return row ? Number(row.value).toFixed(2) : "—";
+      const value = row ? Number(row.value) : NaN;
+      return Number.isFinite(value) && value > 1 ? value : null;
     }
-    const result = resultRows.length ? '<div class="odds-market"><span>1 · X · 2</span><b>' + price(resultRows,"home") + ' · ' + price(resultRows,"draw") + ' · ' + price(resultRows,"away") + '</b></div>' : '';
+    function resultChanceMarkup() {
+      const outcomes = [
+        {key:"home",label:"Home",price:price(resultRows,"home")},
+        {key:"draw",label:"Draw",price:price(resultRows,"draw")},
+        {key:"away",label:"Away",price:price(resultRows,"away")}
+      ];
+      const valid = outcomes.filter(function(item){return Number.isFinite(item.price)&&item.price>1;});
+      if (valid.length !== 3) return '<div class="odds-market"><span>1 · X · 2</span><b>Need all three 1X2 prices to calculate fair chances</b></div>';
+      const total = valid.reduce(function(sum,item){return sum+1/item.price;},0);
+      valid.forEach(function(item){item.chance=(1/item.price)/total*100;});
+      const highest = valid.reduce(function(best,item){return !best||item.chance>best.chance?item:best;},null);
+      return '<div class="odds-win-chances"><strong>WIN PROBABILITY · MARGIN-ADJUSTED ODDS</strong><div class="odds-chance-grid">' +
+        outcomes.map(function(item){
+          const available=Number.isFinite(item.chance);
+          const isHighest=available&&item.key===highest.key;
+          return '<div class="odds-chance '+(isHighest?'odds-chance-highest':'')+'"><span>'+item.label+'</span><b>'+(available?item.chance.toFixed(1)+'%':'—')+'</b><small>'+(available?'Odds '+item.price.toFixed(2)+(isHighest?' · HIGHEST CHANCE':''):'No odds')+'</small></div>';
+        }).join('')+'</div></div>';
+    }
+    const result = resultRows.length ? resultChanceMarkup() : '';
     const goals = goalRows.length ? '<div class="odds-market"><span>Over / Under 2.5</span><b>' + price(goalRows,"over") + ' / ' + price(goalRows,"under") + '</b></div>' : '';
     const btts = bttsRows.length ? '<div class="odds-market"><span>BTTS Yes / No</span><b>' + price(bttsRows,"yes") + ' / ' + price(bttsRows,"no") + '</b></div>' : '';
     return '<div class="odds-bookmaker"><strong>' + escapeHtml(name) + '</strong>' +
@@ -341,8 +501,10 @@ async function loadHeadToHead(button) {
       const date = m.date ? new Date(m.date.replace(" ", "T") + (m.date.includes("Z") ? "" : "Z")).toLocaleDateString() : "Date unavailable";
       return '<div class="h2h-meeting"><span>' + escapeHtml(date) + '</span><b>' + escapeHtml(m.homeTeam) + ' ' + escapeHtml(m.homeGoals) + ' - ' + escapeHtml(m.awayGoals) + ' ' + escapeHtml(m.awayTeam) + '</b><small>' + escapeHtml(m.competition || "Competition unavailable") + '</small></div>';
     }).join("") + '</div>' : "";
-    panel.innerHTML = '<strong>HEAD-TO-HEAD · LAST ' + escapeHtml(s.played || 0) + ' VERIFIED MEETINGS</strong>' + summaryHtml + historyHtml + '<small>' + escapeHtml(payload.note || "Historical context only; not a prediction guarantee.") + '</small>';
-    panel.dataset.loaded = "true"; button.textContent = "Hide H2H";
+    matchHistoryMarkup[fixtureId] = '<section class="h2h-history"><h4>PREVIOUS MEETINGS · LAST ' + escapeHtml(s.played || 0) + ' VERIFIED GAMES</h4>' + summaryHtml + historyHtml + '<small>' + escapeHtml(payload.note || "Historical context only; not a prediction guarantee.") + '</small></section>';
+    panel.dataset.loaded = "true";
+    renderMatchIntelligencePanel(panel, fixtureId);
+    button.textContent = "Hide H2H";
   } catch (error) {
     panel.innerHTML = '<p class="odds-empty">' + escapeHtml(error.message || "Could not load head-to-head history.") + '</p>';
     button.textContent = "Retry H2H";
@@ -367,10 +529,10 @@ function renderMatches(matches) {
     const supportsOdds = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
+      ? '<div class="prediction-actions">' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
         (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
-        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
-      : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
+        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Loading automatic prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Loading automatic prediction…</b></div></div>'
+      : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fixture source yet. JUDY AI will not invent predictions or bookmaker odds.</b></div>';
     return '<article class="fixture-card">' +
       '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span>' +
       (match.fixtureSource ? '<span>' + escapeHtml(match.fixtureSource) + '</span>' : '') + '</div>' +
@@ -396,26 +558,22 @@ async function loadSavedPredictions(matches) {
     ids.forEach(function (id) {
       const saved = payload.predictions[id];
       const panel = document.getElementById("prediction-" + id);
-      const button = document.querySelector(".prediction-button[data-fixture-id=\"" + id + "\"]");
-      if (!panel || !button) return;
+      if (!panel) return;
       if (!saved) {
-        if (button.dataset.finished === "true") {
-          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>No pre-match prediction was saved. The actual score is shown above; prediction accuracy cannot be calculated.</b></div>';
-          button.textContent = "Match finished";
-          button.disabled = true;
-        } else {
-          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
-          button.textContent = "Generate now";
-        }
+        panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
         return;
+      }
+      savedMatchIntelligence[id] = saved;
+      const intelligencePanel = document.getElementById("h2h-" + id);
+      if (intelligencePanel && intelligencePanel.dataset.loaded === "true") {
+        renderMatchIntelligencePanel(intelligencePanel, id);
       }
       panel.innerHTML = predictionOptionsMarkup("Half-time", saved.predictions && saved.predictions.halfTime) +
         predictionOptionsMarkup("Full-time", saved.predictions && saved.predictions.fullTime) +
         '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
-        dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
+        predictionOutcomeMarkup(saved) +
         '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
-      button.textContent = "Prediction saved";
-      button.disabled = true;
+
     });
   } catch (error) {
     console.warn("Could not load saved predictions:", error);
@@ -423,6 +581,57 @@ async function loadSavedPredictions(matches) {
       if (panel.textContent.includes("Checking saved prediction")) panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Could not check saved predictions. Refresh fixtures.</b></div>';
     });
   }
+}
+function venueAdvantageMarkup(data) {
+  const home = data && data.home, away = data && data.away;
+  if (!home || !away) return '<section class="venue-advantage"><h4>🏟️ HOME & AWAY ADVANTAGE</h4><p>Venue-specific team statistics are not available for this fixture yet.</p></section>';
+  function n(v) { return v == null || !Number.isFinite(Number(v)) ? null : Number(v); }
+  function row(label, p) {
+    if (!p || n(p.matches) === 0) return '<div class="venue-profile-row"><strong>' + label + '</strong><span>No verified matches in this venue sample.</span></div>';
+    const m=n(p.matches), w=n(p.wins), d=n(p.draws), l=n(p.losses);
+    const record=w==null||d==null||l==null?'W-D-L not supplied':w+'-'+d+'-'+l;
+    const valid=w!=null&&d!=null&&l!=null&&m>0;
+    const pct=value=>valid?Math.round(value/m*100)+'%':'Not supplied';
+    const rates=valid?'Win '+pct(w)+' · Draw '+pct(d)+' · Loss '+pct(l):'Win / Draw / Loss percentages unavailable';
+    const pattern=m>=5&&l===0?' · UNBEATEN':m>=5&&w===0?' · NO WINS':m>=5&&l/m>=.6?' · HIGH LOSS RATE':m>=5&&w/m>=.6?' · HIGH WIN RATE':'';
+    const gf=n(p.averageGoalsFor), ga=n(p.averageGoalsAgainst);
+    const goals=gf==null||ga==null?'':' · Avg goals '+gf.toFixed(2)+' for / '+ga.toFixed(2)+' against';
+    return '<div class="venue-profile-row"><strong>'+label+'</strong><span>'+escapeHtml(record+' · '+m+' matches')+'</span><span class="venue-rate-line">'+escapeHtml(rates)+'</span><span class="venue-profile-pattern">'+escapeHtml(pattern.trim())+'</span><span>'+escapeHtml(goals)+'</span></div>';
+  }
+  function club(label, team) {
+    const p=team.venueProfiles||{};
+    return '<article class="venue-club-card"><h5>'+label+'</h5>'+row('AT HOME',p.home)+row('AWAY',p.away)+'</article>';
+  }
+  const hp=home.venueProfiles&&home.venueProfiles.home, ap=away.venueProfiles&&away.venueProfiles.away;
+  let verdict='Not enough verified venue-specific matches to compare this fixture fairly.', cls='';
+  if(hp&&ap&&hp.matches>=2&&ap.matches>=2){
+    const hpp=(3*hp.wins+hp.draws)/hp.matches, appp=(3*ap.wins+ap.draws)/ap.matches;
+    const hgd=(hp.averageGoalsFor||0)-(hp.averageGoalsAgainst||0), agd=(ap.averageGoalsFor||0)-(ap.averageGoalsAgainst||0);
+    const edge=(hpp-appp)+.35*(hgd-agd);
+    if(edge>.25){verdict='The home club has stronger results in its home matches than the away club has in its away matches.';cls='venue-edge-home';}
+    else if(edge<-.25){verdict='The away club has stronger away-form indicators than the home club has at home.';cls='venue-edge-away';}
+    else{verdict='The two clubs’ relevant venue records are closely balanced.';cls='venue-edge-level';}
+  }
+  return '<section class="venue-advantage"><h4>🏟️ HOME & AWAY ADVANTAGE</h4><div class="venue-club-grid">'+
+    club('HOME TEAM · FULL VENUE RECORD',home)+club('AWAY TEAM · FULL VENUE RECORD',away)+'</div>'+
+    '<div class="venue-advantage-verdict '+cls+'"><strong>FIXTURE VENUE COMPARISON</strong><span>'+escapeHtml(verdict)+'</span></div>'+
+    '<small>Each club’s home and away records are shown separately. Pattern labels require at least five matches. Figures use completed matches only; small samples can mislead and past form does not guarantee the next result.</small></section>';
+}
+function renderMatchIntelligencePanel(panel, fixtureId) {
+  const saved = savedMatchIntelligence[fixtureId] || {};
+  const history = matchHistoryMarkup[fixtureId] || "";
+  const player = saved.playerWatch ? playerWatchMarkup(saved.playerWatch) :
+    '<section class="player-watch"><h4>INJURIES, SUSPENSIONS & PLAYER AVAILABILITY</h4><p>Player availability information has not been returned for this fixture yet.</p></section>';
+  const form = saved.teamIntelligence ? teamIntelligenceMarkup(saved.teamIntelligence) :
+    '<section class="team-intelligence"><h4>RECENT TEAM FORM</h4><p>Recent form data is not available yet.</p></section>';
+  const quality = saved.dataQuality ? dataQualityMarkup(saved.dataQuality) : "";
+  panel.innerHTML = '<div class="match-intelligence-stack">' +
+    (history || '<section class="h2h-history"><h4>HEAD-TO-HEAD</h4><p>Verified previous meetings are not available yet.</p></section>') +
+    venueAdvantageMarkup(saved.teamIntelligence) +
+    '<div class="match-intelligence-heading"><span>TEAM NEWS & MATCH INTELLIGENCE</span><small>Verified information only</small></div>' +
+    player + clubPlayerSpotlightMarkup(saved.playerWatch) + form + quality +
+    '<p class="match-intelligence-footnote">Unavailable data is marked clearly; it is never treated as confirmation that a player is fit or available.</p>' +
+    '</div>';
 }
 function predictionOptionsMarkup(period, data) {
   if (!data || !Array.isArray(data.options) || !data.options.length) {
@@ -464,27 +673,91 @@ function predictionOutcomeMarkup(payload) {
     '<small>WON means at least one of JUDY AI’s two ranked scores matched. LOST means neither matched. Results remain PENDING until the official score is available.</small></section>';
 }
 function playerWatchMarkup(data) {
-  if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
+  if (!data) return '<section class="player-watch"><h4>INJURIES, SUSPENSIONS & PLAYER AVAILABILITY</h4><p>Player availability: not supplied by the data provider.</p></section>';
   const absences = Array.isArray(data.absences) ? data.absences : [];
   function list(rows) {
-    return rows.length ? rows.map(row => '<li>' + escapeHtml(row.name) + ' — ' + escapeHtml(row.position) + '</li>').join('') : '<li>Not available yet</li>';
+    return rows.length ? rows.map(row => '<li><strong>' + escapeHtml(row.name || row.player || "Player unavailable") + '</strong>' +
+      (row.position ? ' · ' + escapeHtml(row.position) : '') + '</li>').join('') : '<li>Not available from provider</li>';
   }
-  const absenceHtml = absences.length
-    ? absences.map(row => '<li><strong>' + escapeHtml(row.category || "Unavailable") + ':</strong> ' +
-      escapeHtml(row.player) + ' · ' + escapeHtml(row.team || "Team not identified") +
-      ' — ' + escapeHtml(row.reason || "Reason not supplied") +
-      (row.endDate ? ' · Until ' + escapeHtml(String(row.endDate).slice(0,10)) : '') + '</li>').join('')
-    : '<li>No unavailable players supplied by the data source for this fixture. This does not confirm that every player is fit.</li>';
+  const groups = [
+    { label: "INJURIES", test: category => /injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle/i.test(category) },
+    { label: "SUSPENSIONS", test: category => /suspend|red card|yellow card|disciplin/i.test(category) },
+    { label: "DOUBTFUL", test: category => /doubt|questionable|late test/i.test(category) },
+    { label: "OTHER ABSENCES", test: category => !/injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle|suspend|red card|yellow card|disciplin|doubt|questionable|late test/i.test(category) }
+  ];
+  const absenceHtml = absences.length ? groups.map(group => {
+    const rows = absences.filter(row => group.test(String(row.category || row.reason || "")));
+    return rows.length ? '<div class="absence-group"><strong>' + group.label + '</strong><ul>' +
+      rows.map(row => '<li><b>' + escapeHtml(row.player || "Name unavailable") + '</b> · ' +
+        escapeHtml(row.team || "Team not identified") + ' — ' +
+        escapeHtml(row.reason || row.category || "Reason not supplied") +
+        (row.endDate ? ' · Until ' + escapeHtml(String(row.endDate).slice(0,10)) : '') +
+        '</li>').join('') + '</ul></div>' : '';
+  }).join('') : '<p class="availability-empty">No unavailable players were supplied by the data source. This does not confirm that every player is fit.</p>';
   const impact = data.predictionImpact || {};
-  return '<section class="player-watch"><h4>PLAYER WATCH · INJURIES & MISSING PLAYERS</h4><strong>Unavailable / doubtful players</strong><ul>' + absenceHtml +
-    '</ul><strong>' + escapeHtml(data.lineups && data.lineups.label || "Confirmed / expected lineups") +
-    '</strong><div class="player-watch-teams"><div><b>Home team</b><ul>' + list(data.lineups && data.lineups.home || []) +
-    '</ul></div><div><b>Away team</b><ul>' + list(data.lineups && data.lineups.away || []) +
-    '</ul></div></div><div class="player-impact"><strong>Effect on score predictions: ' +
-    escapeHtml(impact.status || "Not assessed") + '</strong><p>' +
-    escapeHtml(impact.reason || "Player impact has not been verified.") +
+  const lineups = data.lineups || {};
+  return '<section class="player-watch"><h4>PLAYER AVAILABILITY</h4>' + absenceHtml +
+    '<div class="lineup-heading"><strong>' + escapeHtml(lineups.label || "LINEUPS") + '</strong>' +
+    '<small>' + escapeHtml(lineups.status || "Status not supplied") + '</small></div>' +
+    '<div class="player-watch-teams"><div><b>HOME TEAM</b><ul>' + list(lineups.home || []) +
+    '</ul></div><div><b>AWAY TEAM</b><ul>' + list(lineups.away || []) +
+    '</ul></div></div><div class="player-impact"><strong>IMPACT ON PREDICTION · ' +
+    escapeHtml(impact.status || "NOT ASSESSED") + '</strong><p>' +
+    escapeHtml(impact.reason || "No verified player impact assessment is available.") +
     '</p></div><small>Source: ' + escapeHtml(data.source || "Not supplied") +
-    '. Only provider-listed information is shown. Missing information is not guessed.</small></section>';
+    '. Only provider-listed information is shown; missing information is never guessed.</small></section>';
+}
+function clubPlayerSpotlightMarkup(data) {
+  const source = data || {};
+  const watch = source.playersToWatch || source.watchList || source.players_to_watch || {};
+  const best = source.bestPlayers || source.topPlayers || source.best_players || {};
+  function rowsFor(group, side) {
+    if (Array.isArray(group)) return group;
+    if (group && Array.isArray(group[side])) return group[side];
+    return [];
+  }
+  function explicitYesNo(value) {
+    if (value === true || value === 1 || /^(yes|true|played|available|in squad|selected)$/i.test(String(value || "").trim())) return "Yes";
+    if (value === false || value === 0 || /^(no|false|did not play|not selected|out|not in squad)$/i.test(String(value || "").trim())) return "No";
+    return "Not supplied";
+  }
+  function playerRows(rows) {
+    if (!rows.length) return '<p class="club-player-empty">Player profiles or performance rankings have not been supplied by the data provider yet.</p>';
+    return '<ul>' + rows.slice(0, 5).map(function (player) {
+      const name = player.name || player.player || player.displayName || player.display_name || "Player name unavailable";
+      const position = player.position || player.positionName || player.position_name || "";
+      const detail = player.reason || player.why || player.highlight || player.ratingLabel || player.rating_label || "";
+      const stats = [player.rating != null ? "Rating " + player.rating : "", player.goals != null ? player.goals + " goals" : "", player.assists != null ? player.assists + " assists" : ""].filter(Boolean).join(" · ");
+      const last = player.lastMatch || player.last_match || player.previousMatch || player.previous_match || {};
+      const lastFlag = player.playedLastMatch ?? player.played_last_match ?? player.lastMatchPlayed ?? player.last_match_played ?? last.played ?? last.appeared;
+      const lastStatus = explicitYesNo(lastFlag);
+      const lastDetails = [last.date || player.lastMatchDate || player.last_match_date, last.opponent || player.lastOpponent || player.last_opponent, last.minutes != null ? last.minutes + " min" : (player.lastMatchMinutes != null ? player.lastMatchMinutes + " min" : "")].filter(Boolean).join(" · ");
+      const squadFlag = player.isInSquad ?? player.inSquad ?? player.in_squad ?? player.matchdaySquad ?? player.matchday_squad ?? player.selectedForMatch ?? player.selected_for_match;
+      const squadStatus = player.squadStatus || player.squad_status || player.matchdaySquadStatus || player.matchday_squad_status || "";
+      const startingFlag = player.isStarting ?? player.starting ?? player.is_starting ?? player.starting_xi;
+      const substituteFlag = player.isSubstitute ?? player.substitute ?? player.onBench ?? player.on_bench;
+      let squadText = squadStatus ? String(squadStatus) : explicitYesNo(squadFlag);
+      if (/^not supplied$/.test(squadText) && startingFlag != null) squadText = explicitYesNo(startingFlag) === "Yes" ? "Yes — starting XI" : "No — not in starting XI";
+      if (/^not supplied$/.test(squadText) && substituteFlag != null && explicitYesNo(substituteFlag) === "Yes") squadText = "Yes — substitute bench";
+      return '<li><strong>' + escapeHtml(name) + '</strong>' +
+        (position ? '<span>' + escapeHtml(position) + '</span>' : '') +
+        (detail ? '<small>' + escapeHtml(detail) + '</small>' : '') +
+        (stats ? '<small>' + escapeHtml(stats) + '</small>' : '') +
+        '<small class="player-appearance-status">Last match: <b>' + escapeHtml(lastStatus) + '</b>' +
+        (lastDetails ? ' · ' + escapeHtml(lastDetails) : '') + '</small>' +
+        '<small class="player-appearance-status">Today’s squad: <b>' + escapeHtml(squadText) + '</b></small></li>';
+    }).join('') + '</ul>';
+  }
+  function teamCard(title, group, side) {
+    return '<div class="club-player-team"><strong>' + title + '</strong>' +
+      '<div class="club-player-columns"><section><b>HOME CLUB</b>' + playerRows(rowsFor(group, "home")) +
+      '</section><section><b>AWAY CLUB</b>' + playerRows(rowsFor(group, "away")) + '</section></div></div>';
+  }
+  return '<section class="club-player-spotlight"><h4>⭐ PLAYERS TO WATCH</h4>' +
+    teamCard("Match impact candidates", watch) +
+    '<h4>🏆 BEST PLAYERS AT EACH CLUB</h4>' +
+    teamCard("Club performance leaders", best) +
+    '<small>Last-match status tells whether the player appeared in the club’s previous completed match. Today’s squad status is confirmed only when the provider supplies the matchday squad or starting XI. “Not supplied” means unknown, not No.</small><small>Rankings require verified player profiles or season statistics. Missing player data is not guessed.</small></section>';
 }
 function dataQualityMarkup(data) {
   if (!data) return '<section class="data-quality"><h4>DATA QUALITY</h4><p>Quality report unavailable for this saved prediction.</p></section>';
@@ -517,7 +790,7 @@ function teamIntelligenceMarkup(data) {
   }
   return '<section class="team-intelligence"><h4>TEAM INTELLIGENCE · RECENT FORM</h4>' +
     teamBlock("Home team", data.home) + teamBlock("Away team", data.away) +
-    '<small>Based on completed match results. Injuries, suspensions and lineups are not verified here.</small></section>';
+    '<small>Recent form is based on completed match results. Player availability and lineups are shown separately above.</small></section>';
 }
 async function generatePrediction(button) {
   const fixtureId = button.dataset.fixtureId;
@@ -680,6 +953,13 @@ dateInput.addEventListener("change", function () {
   });
 });
 if (refreshLiveScoresButton) refreshLiveScoresButton.addEventListener("click", loadLiveScores);
+if (refreshSavedPredictionsButton) refreshSavedPredictionsButton.addEventListener("click", loadSavedPredictions);
+if (savedPredictionSearch) savedPredictionSearch.addEventListener("input", function () { renderSavedPredictions(savedPredictionRecords); });
+if (savedPredictionFilter) savedPredictionFilter.addEventListener("change", function () { renderSavedPredictions(savedPredictionRecords); });
+loadSavedPredictions();
+savedPredictionsTimer = setInterval(function () {
+  if (!document.hidden) loadSavedPredictions();
+}, 60000);
 loadLiveScores();
 liveScoreTimer = setInterval(function () {
   if (appSettings.autoRefreshLiveScores && !document.hidden) loadLiveScores();
@@ -714,6 +994,5 @@ fixturesBox.addEventListener("click", function (event) {
     loadFixtureOdds(oddsButton);
     return;
   }
-  const button = event.target.closest(".prediction-button");
-  if (button) generatePrediction(button);
+  // Match predictions are prepared automatically; no manual Generate action is required.
 });
