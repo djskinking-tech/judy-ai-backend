@@ -26,6 +26,7 @@
     <nav class="section-nav" aria-label="Main sections">
       <a href="#live-center">Live scores</a>
       <a href="#saved-predictions-center">My predictions</a>
+      <a href="#daily-prediction-report">Daily report</a>
       <a href="#fixtures-center">Fixtures</a>
       <a href="#performance-dashboard">Predictions & results</a>
     </nav>
@@ -112,6 +113,14 @@
           <button id="refresh-performance" class="primary-button" type="button">Refresh data</button>
         </div>
         <p id="performance-status" class="performance-status" role="status">Loading performance data…</p>
+
+        <section id="daily-prediction-report" class="daily-report" aria-live="polite">
+          <div class="daily-report-heading"><div><p class="eyebrow">THE NEXT MATCHES TO WATCH</p><h3>Daily Prediction Report</h3><p>Upcoming saved predictions ranked by their available top-score probabilities.</p></div><button id="refresh-daily-report" class="secondary-button" type="button">Refresh report</button></div>
+          <div class="daily-report-tools"><label for="daily-report-date">MATCH DAY<select id="daily-report-date"><option value="all">All upcoming</option><option value="today">Today · EAT</option><option value="tomorrow">Tomorrow · EAT</option></select></label><label for="daily-report-search">SEARCH<input id="daily-report-search" type="search" placeholder="Team or league"></label></div>
+          <p id="daily-report-status" class="daily-report-status" role="status">Preparing report…</p>
+          <div id="daily-report-list" class="daily-report-list"><div class="daily-report-empty">Loading saved predictions…</div></div>
+          <p class="daily-report-disclaimer">Rankings are based on the probabilities stored with each prediction. Probabilities are estimates, not guarantees. Matches without saved HT and FT predictions are not included.</p>
+        </section>
         <div id="performance-totals" class="totals-grid"></div>
         <div id="model-performance" class="model-grid"></div>
         <section id="accuracy-centre" class="accuracy-centre" aria-live="polite">
