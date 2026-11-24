@@ -637,27 +637,39 @@ function predictionOutcomeMarkup(payload) {
     '<small>WON means at least one of JUDY AI’s two ranked scores matched. LOST means neither matched. Results remain PENDING until the official score is available.</small></section>';
 }
 function playerWatchMarkup(data) {
-  if (!data) return '<section class="player-watch"><h4>PLAYER WATCH</h4><p>Player availability: Unknown — provider data not available.</p></section>';
+  if (!data) return '<section class="player-watch"><h4>INJURIES, SUSPENSIONS & PLAYER AVAILABILITY</h4><p>Player availability: not supplied by the data provider.</p></section>';
   const absences = Array.isArray(data.absences) ? data.absences : [];
   function list(rows) {
-    return rows.length ? rows.map(row => '<li>' + escapeHtml(row.name) + ' — ' + escapeHtml(row.position) + '</li>').join('') : '<li>Not available yet</li>';
+    return rows.length ? rows.map(row => '<li><strong>' + escapeHtml(row.name || row.player || "Player unavailable") + '</strong>' +
+      (row.position ? ' · ' + escapeHtml(row.position) : '') + '</li>').join('') : '<li>Not available from provider</li>';
   }
-  const absenceHtml = absences.length
-    ? absences.map(row => '<li><strong>' + escapeHtml(row.category || "Unavailable") + ':</strong> ' +
-      escapeHtml(row.player) + ' · ' + escapeHtml(row.team || "Team not identified") +
-      ' — ' + escapeHtml(row.reason || "Reason not supplied") +
-      (row.endDate ? ' · Until ' + escapeHtml(String(row.endDate).slice(0,10)) : '') + '</li>').join('')
-    : '<li>No unavailable players supplied by the data source for this fixture. This does not confirm that every player is fit.</li>';
+  const groups = [
+    { label: "INJURIES", test: category => /injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle/i.test(category) },
+    { label: "SUSPENSIONS", test: category => /suspend|red card|yellow card|disciplin/i.test(category) },
+    { label: "DOUBTFUL", test: category => /doubt|questionable|late test/i.test(category) },
+    { label: "OTHER ABSENCES", test: category => true }
+  ];
+  const absenceHtml = absences.length ? groups.map(group => {
+    const rows = absences.filter(row => group.test(String(row.category || row.reason || "")));
+    return rows.length ? '<div class="absence-group"><strong>' + group.label + '</strong><ul>' +
+      rows.map(row => '<li><b>' + escapeHtml(row.player || "Name unavailable") + '</b> · ' +
+        escapeHtml(row.team || "Team not identified") + ' — ' +
+        escapeHtml(row.reason || row.category || "Reason not supplied") +
+        (row.endDate ? ' · Until ' + escapeHtml(String(row.endDate).slice(0,10)) : '') +
+        '</li>').join('') + '</ul></div>' : '';
+  }).join('') : '<p class="availability-empty">No unavailable players were supplied by the data source. This does not confirm that every player is fit.</p>';
   const impact = data.predictionImpact || {};
-  return '<section class="player-watch"><h4>PLAYER WATCH · INJURIES & MISSING PLAYERS</h4><strong>Unavailable / doubtful players</strong><ul>' + absenceHtml +
-    '</ul><strong>' + escapeHtml(data.lineups && data.lineups.label || "Confirmed / expected lineups") +
-    '</strong><div class="player-watch-teams"><div><b>Home team</b><ul>' + list(data.lineups && data.lineups.home || []) +
-    '</ul></div><div><b>Away team</b><ul>' + list(data.lineups && data.lineups.away || []) +
-    '</ul></div></div><div class="player-impact"><strong>Effect on score predictions: ' +
-    escapeHtml(impact.status || "Not assessed") + '</strong><p>' +
-    escapeHtml(impact.reason || "Player impact has not been verified.") +
+  const lineups = data.lineups || {};
+  return '<section class="player-watch"><h4>PLAYER AVAILABILITY</h4>' + absenceHtml +
+    '<div class="lineup-heading"><strong>' + escapeHtml(lineups.label || "LINEUPS") + '</strong>' +
+    '<small>' + escapeHtml(lineups.status || "Status not supplied") + '</small></div>' +
+    '<div class="player-watch-teams"><div><b>HOME TEAM</b><ul>' + list(lineups.home || []) +
+    '</ul></div><div><b>AWAY TEAM</b><ul>' + list(lineups.away || []) +
+    '</ul></div></div><div class="player-impact"><strong>IMPACT ON PREDICTION · ' +
+    escapeHtml(impact.status || "NOT ASSESSED") + '</strong><p>' +
+    escapeHtml(impact.reason || "No verified player impact assessment is available.") +
     '</p></div><small>Source: ' + escapeHtml(data.source || "Not supplied") +
-    '. Only provider-listed information is shown. Missing information is not guessed.</small></section>';
+    '. Only provider-listed information is shown; missing information is never guessed.</small></section>';
 }
 function dataQualityMarkup(data) {
   if (!data) return '<section class="data-quality"><h4>DATA QUALITY</h4><p>Quality report unavailable for this saved prediction.</p></section>';
@@ -690,7 +702,7 @@ function teamIntelligenceMarkup(data) {
   }
   return '<section class="team-intelligence"><h4>TEAM INTELLIGENCE · RECENT FORM</h4>' +
     teamBlock("Home team", data.home) + teamBlock("Away team", data.away) +
-    '<small>Based on completed match results. Injuries, suspensions and lineups are not verified here.</small></section>';
+    '<small>Recent form is based on completed match results. Player availability and lineups are shown separately above.</small></section>';
 }
 async function generatePrediction(button) {
   const fixtureId = button.dataset.fixtureId;
