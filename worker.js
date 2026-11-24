@@ -1660,6 +1660,7 @@ export default {
       // does not repeatedly poll a community-funded service.
       let fixtureSource = "Sportmonks";
       let fallbackNote = null;
+      const openLigaDiagnostics = [];
       if (!matches.length) {
         const openLigaRows = [];
         const season = Number(date.slice(0, 4)) - (Number(date.slice(5, 7)) < 7 ? 1 : 0);
@@ -1680,12 +1681,16 @@ export default {
             const apiUrl = "https://api.openligadb.de/getmatchdata/" + league.shortcut + "/" + season;
             const cacheKey = new Request("https://judy-ai-cache.example/openligadb/" + league.shortcut + "/" + season);
             let rows = [];
+            let httpStatus = null;
+            let cacheHit = false;
             const cachedLeague = await caches.default.match(cacheKey);
             if (cachedLeague) {
+              cacheHit = true;
               const cachedBody = await cachedLeague.json();
               rows = Array.isArray(cachedBody) ? cachedBody : [];
             } else {
               const upstream = await fetch(apiUrl, { headers: { "Accept": "application/json" } });
+              httpStatus = upstream.status;
               if (upstream.ok) {
                 const body = await upstream.json();
                 rows = Array.isArray(body) ? body : [];
@@ -1694,6 +1699,7 @@ export default {
                 }));
               }
             }
+            let dateMatches = 0;
             for (const row of rows) {
               if (!row || !row.matchID || !row.team1 || !row.team2) continue;
               const rawUtc = row.matchDateTimeUTC || null;
@@ -1701,6 +1707,7 @@ export default {
               const localDate = kickoff && !Number.isNaN(kickoff.getTime())
                 ? kickoffFormatter.format(kickoff) : String(row.matchDateTime || "").slice(0, 10);
               if (localDate !== date) continue;
+              dateMatches++;
               const kickoffLabel = kickoff && !Number.isNaN(kickoff.getTime())
                 ? new Intl.DateTimeFormat("en-KE", {
                     timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", hour12: true
@@ -1719,7 +1726,21 @@ export default {
                 status: row.matchIsFinished ? "Finished" : "Scheduled"
               });
             }
-          } catch {}
+            openLigaDiagnostics.push({
+              league: league.shortcut,
+              season,
+              httpStatus,
+              cacheHit,
+              rows: rows.length,
+              matchesForRequestedDate: dateMatches
+            });
+          } catch (openLigaError) {
+            openLigaDiagnostics.push({
+              league: league.shortcut,
+              season,
+              error: openLigaError && openLigaError.message ? openLigaError.message : String(openLigaError)
+            });
+          }
         }
         const uniqueOpenLiga = new Map(openLigaRows.map(row => [row.id, row]));
         matches = [...uniqueOpenLiga.values()];
@@ -1784,6 +1805,7 @@ export default {
         source,
         fallbackDatesChecked,
         fallbackNote,
+        openLigaDiagnostics,
         predictionsSupported: fixtureSource === "Sportmonks",
         pagination: {
           pages_fetched: primary.pagesFetched,
