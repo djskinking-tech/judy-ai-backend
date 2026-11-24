@@ -647,7 +647,7 @@ function playerWatchMarkup(data) {
     { label: "INJURIES", test: category => /injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle/i.test(category) },
     { label: "SUSPENSIONS", test: category => /suspend|red card|yellow card|disciplin/i.test(category) },
     { label: "DOUBTFUL", test: category => /doubt|questionable|late test/i.test(category) },
-    { label: "OTHER ABSENCES", test: category => true }
+    { label: "OTHER ABSENCES", test: category => !/injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle|suspend|red card|yellow card|disciplin|doubt|questionable|late test/i.test(category) }
   ];
   const absenceHtml = absences.length ? groups.map(group => {
     const rows = absences.filter(row => group.test(String(row.category || row.reason || "")));
