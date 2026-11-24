@@ -1674,7 +1674,7 @@ export default {
         // Discover additional competitions from OpenLigaDB instead of guessing
         // shortcuts. Cache the season catalogue for 24 hours and limit requests.
         try {
-          const catalogueKey = new Request("https://judy-ai-cache.example/openligadb/available/" + season);
+          const catalogueKey = new Request("https://judy-ai-cache.example/openligadb/available/v2/" + season);
           const cachedCatalogue = await caches.default.match(catalogueKey);
           let availableLeagues = [];
           if (cachedCatalogue) {
@@ -1690,13 +1690,17 @@ export default {
               const catalogueBody = await catalogueResponse.json();
               availableLeagues = Array.isArray(catalogueBody) ? catalogueBody : [];
               await caches.default.put(catalogueKey, new Response(JSON.stringify(availableLeagues), {
-                headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }
+                headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
               }));
             }
           }
           openLigaCatalogueDiagnostics.discovered = availableLeagues.length;
+          openLigaCatalogueDiagnostics.availableCompetitionNames = availableLeagues
+            .map(item => String(item && item.leagueName || "").trim())
+            .filter(Boolean).slice(0, 30);
           const wantedCompetition = /serie\s*a|ligue\s*1|eredivisie|primeira\s*liga|europa\s*league|conference\s*league|championship|scottish\s*premier|belgian\s*(pro|first)|super\s*league|2\\.?\s*bundesliga|segunda\s*division|serie\s*b|ligue\s*2/i;
-          const existingShortcuts = new Set(leagues.map(item => item.shortcut.toLowerCase()));
+          openLigaCatalogueDiagnostics.selectedCompetitions = leagues.map(item => ({ shortcut: item.shortcut, name: item.name }));
+        const existingShortcuts = new Set(leagues.map(item => item.shortcut.toLowerCase()));
           for (const item of availableLeagues) {
             const shortcut = String(item && item.leagueShortcut || "").trim();
             const name = String(item && item.leagueName || "").trim();
@@ -1724,7 +1728,7 @@ export default {
         for (const league of leagues) {
           try {
             const apiUrl = "https://api.openligadb.de/getmatchdata/" + league.shortcut + "/" + season;
-            const cacheKey = new Request("https://judy-ai-cache.example/openligadb/" + league.shortcut + "/" + season);
+            const cacheKey = new Request("https://judy-ai-cache.example/openligadb/v2/" + league.shortcut + "/" + season);
             let rows = [];
             let httpStatus = null;
             let cacheHit = false;
@@ -1740,7 +1744,7 @@ export default {
                 const body = await upstream.json();
                 rows = Array.isArray(body) ? body : [];
                 await caches.default.put(cacheKey, new Response(JSON.stringify(rows), {
-                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }
+                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
                 }));
               }
             }
@@ -1830,7 +1834,7 @@ export default {
         ));
         for (const competition of competitions) {
           try {
-            const cacheKey = new Request("https://judy-ai-cache.example/openfootball/" + seasonFolder + "/" + competition.code);
+            const cacheKey = new Request("https://judy-ai-cache.example/openfootball/v2/" + seasonFolder + "/" + competition.code);
             const cached = await caches.default.match(cacheKey);
             let rows = [];
             let httpStatus = null;
@@ -1847,7 +1851,7 @@ export default {
                 const body = await upstream.json();
                 rows = body && Array.isArray(body.matches) ? body.matches : [];
                 await caches.default.put(cacheKey, new Response(JSON.stringify(rows), {
-                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }
+                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
                 }));
               }
             }
