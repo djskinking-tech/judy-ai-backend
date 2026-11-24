@@ -25,6 +25,7 @@
 
     <nav class="section-nav" aria-label="Main sections">
       <a href="#live-center">Live scores</a>
+      <a href="#saved-predictions-center">My predictions</a>
       <a href="#fixtures-center">Fixtures</a>
       <a href="#performance-dashboard">Predictions & results</a>
     </nav>
@@ -59,6 +60,16 @@
           <button id="refresh-live-scores" class="secondary-button" type="button">Refresh live scores</button>
         </div>
         <div id="live-score-list" class="live-score-list"><div class="live-empty">Loading live matches…</div></div>
+      </section>
+
+      <section id="saved-predictions-center" class="saved-predictions-section" aria-live="polite">
+        <div class="saved-predictions-heading">
+          <div><p class="eyebrow">LOCKED BEFORE KICK-OFF</p><h2>My saved predictions</h2>
+          <p>Original HT and FT predictions stay here during LIVE matches and after full-time, even when a match leaves the live feed.</p></div>
+          <button id="refresh-saved-predictions" class="secondary-button" type="button">Refresh predictions</button>
+        </div>
+        <p id="saved-predictions-status" class="saved-predictions-status" role="status">Loading your saved predictions…</p>
+        <div id="saved-prediction-list" class="saved-prediction-list"><div class="saved-prediction-empty">Loading saved predictions…</div></div>
       </section>
 
       <section id="fixtures-center" class="fixtures-section">
