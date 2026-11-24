@@ -300,6 +300,41 @@ async function loadFixtureOdds(button) {
     button.disabled = false;
   }
 }
+
+async function loadHeadToHead(button) {
+  const fixtureId = button.dataset.fixtureId;
+  const panel = document.getElementById("h2h-" + fixtureId);
+  if (!panel || !/^\\d+$/.test(fixtureId || "")) return;
+  if (panel.dataset.loaded === "true") {
+    panel.hidden = !panel.hidden;
+    button.textContent = panel.hidden ? "Head to head" : "Hide H2H";
+    return;
+  }
+  button.disabled = true; button.textContent = "Loading H2H…";
+  panel.hidden = false;
+  panel.innerHTML = '<p class="odds-empty">Checking previous meetings and verified scores…</p>';
+  try {
+    const response = await fetch("/api/head-to-head?fixtureId=" + encodeURIComponent(fixtureId), { headers: {"Accept":"application/json"} });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || "Head-to-head history unavailable.");
+    const s = payload.summary || {}, r = payload.rates || {};
+    const home = payload.fixture && payload.fixture.homeTeam || "Home", away = payload.fixture && payload.fixture.awayTeam || "Away";
+    const meetings = Array.isArray(payload.meetings) ? payload.meetings : [];
+    const summaryHtml = s.played
+      ? '<div class="h2h-summary"><div><b>' + escapeHtml(s.homeTeamWins) + '</b><span>' + escapeHtml(home) + ' wins</span></div><div><b>' + escapeHtml(s.draws) + '</b><span>Draws</span></div><div><b>' + escapeHtml(s.awayTeamWins) + '</b><span>' + escapeHtml(away) + ' wins</span></div></div><div class="h2h-stats"><span>Goals: ' + escapeHtml(s.homeTeamGoals) + ' - ' + escapeHtml(s.awayTeamGoals) + '</span><span>Avg goals: ' + escapeHtml(r.averageGoals) + '</span><span>BTTS: ' + escapeHtml(r.bothTeamsScored) + '%</span><span>Over 2.5: ' + escapeHtml(r.over25) + '%</span></div>'
+      : '<p class="odds-empty">No completed head-to-head meetings with verified scores were returned by the provider.</p>';
+    const historyHtml = meetings.length ? '<div class="h2h-meetings">' + meetings.map(function (m) {
+      const date = m.date ? new Date(m.date.replace(" ", "T") + (m.date.includes("Z") ? "" : "Z")).toLocaleDateString() : "Date unavailable";
+      return '<div class="h2h-meeting"><span>' + escapeHtml(date) + '</span><b>' + escapeHtml(m.homeTeam) + ' ' + escapeHtml(m.homeGoals) + ' - ' + escapeHtml(m.awayGoals) + ' ' + escapeHtml(m.awayTeam) + '</b><small>' + escapeHtml(m.competition || "Competition unavailable") + '</small></div>';
+    }).join("") + '</div>' : "";
+    panel.innerHTML = '<strong>HEAD-TO-HEAD · LAST ' + escapeHtml(s.played || 0) + ' VERIFIED MEETINGS</strong>' + summaryHtml + historyHtml + '<small>' + escapeHtml(payload.note || "Historical context only; not a prediction guarantee.") + '</small>';
+    panel.dataset.loaded = "true"; button.textContent = "Hide H2H";
+  } catch (error) {
+    panel.innerHTML = '<p class="odds-empty">' + escapeHtml(error.message || "Could not load head-to-head history.") + '</p>';
+    button.textContent = "Retry H2H";
+  } finally { button.disabled = false; }
+}
+
 function renderMatches(matches) {
   if (!matches.length) {
     fixturesBox.innerHTML = '<div class="empty-state">No fixtures were returned for this date. Try another date.</div>';
@@ -317,8 +352,8 @@ function renderMatches(matches) {
     const supportsPredictions = isOpenLiga || (match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false);
     const supportsOdds = !isOpenLiga && supportsPredictions && /^\d+$/.test(String(fixtureId));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + '</div>' +
-        (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
+      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsOdds ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Head to head</button>' : '') + '</div>' +
+        (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div><div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
         '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
@@ -657,6 +692,8 @@ if (settingsClose) settingsClose.addEventListener("click", function () { toggleS
 if (appSettings.autoLoadFixtures) loadFixtures();
 
 fixturesBox.addEventListener("click", function (event) {
+  const h2hButton = event.target.closest(".h2h-button");
+  if (h2hButton) { loadHeadToHead(h2hButton); return; }
   const oddsButton = event.target.closest(".odds-button");
   if (oddsButton) {
     loadFixtureOdds(oddsButton);
