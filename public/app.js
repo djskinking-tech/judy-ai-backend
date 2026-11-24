@@ -62,6 +62,8 @@ const savedPredictionSearch = document.getElementById("saved-prediction-search")
 const savedPredictionFilter = document.getElementById("saved-prediction-filter");
 let savedPredictionRecords = [];
 let savedPredictionsTimer = null;
+const savedMatchIntelligence = Object.create(null);
+const matchHistoryMarkup = Object.create(null);
 
 function savedPredictionScores(predictions, period) {
   const options = predictions && predictions[period] && Array.isArray(predictions[period].options)
@@ -499,8 +501,10 @@ async function loadHeadToHead(button) {
       const date = m.date ? new Date(m.date.replace(" ", "T") + (m.date.includes("Z") ? "" : "Z")).toLocaleDateString() : "Date unavailable";
       return '<div class="h2h-meeting"><span>' + escapeHtml(date) + '</span><b>' + escapeHtml(m.homeTeam) + ' ' + escapeHtml(m.homeGoals) + ' - ' + escapeHtml(m.awayGoals) + ' ' + escapeHtml(m.awayTeam) + '</b><small>' + escapeHtml(m.competition || "Competition unavailable") + '</small></div>';
     }).join("") + '</div>' : "";
-    panel.innerHTML = '<strong>HEAD-TO-HEAD · LAST ' + escapeHtml(s.played || 0) + ' VERIFIED MEETINGS</strong>' + summaryHtml + historyHtml + '<small>' + escapeHtml(payload.note || "Historical context only; not a prediction guarantee.") + '</small>';
-    panel.dataset.loaded = "true"; button.textContent = "Hide H2H";
+    matchHistoryMarkup[fixtureId] = '<section class="h2h-history"><h4>PREVIOUS MEETINGS · LAST ' + escapeHtml(s.played || 0) + ' VERIFIED GAMES</h4>' + summaryHtml + historyHtml + '<small>' + escapeHtml(payload.note || "Historical context only; not a prediction guarantee.") + '</small></section>';
+    panel.dataset.loaded = "true";
+    renderMatchIntelligencePanel(panel, fixtureId);
+    button.textContent = "Hide H2H";
   } catch (error) {
     panel.innerHTML = '<p class="odds-empty">' + escapeHtml(error.message || "Could not load head-to-head history.") + '</p>';
     button.textContent = "Retry H2H";
@@ -554,26 +558,22 @@ async function loadSavedPredictions(matches) {
     ids.forEach(function (id) {
       const saved = payload.predictions[id];
       const panel = document.getElementById("prediction-" + id);
-      const button = document.querySelector(".prediction-button[data-fixture-id=\"" + id + "\"]");
-      if (!panel || !button) return;
+      if (!panel) return;
       if (!saved) {
-        if (button.dataset.finished === "true") {
-          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>No pre-match prediction was saved. The actual score is shown above; prediction accuracy cannot be calculated.</b></div>';
-          button.textContent = "Match finished";
-          button.disabled = true;
-        } else {
-          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
-          button.textContent = "Generate now";
-        }
+        panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
         return;
+      }
+      savedMatchIntelligence[id] = saved;
+      const intelligencePanel = document.getElementById("h2h-" + id);
+      if (intelligencePanel && intelligencePanel.dataset.loaded === "true") {
+        renderMatchIntelligencePanel(intelligencePanel, id);
       }
       panel.innerHTML = predictionOptionsMarkup("Half-time", saved.predictions && saved.predictions.halfTime) +
         predictionOptionsMarkup("Full-time", saved.predictions && saved.predictions.fullTime) +
         '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
-        dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
+        predictionOutcomeMarkup(saved) +
         '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
-      button.textContent = "Prediction saved";
-      button.disabled = true;
+
     });
   } catch (error) {
     console.warn("Could not load saved predictions:", error);
@@ -581,6 +581,21 @@ async function loadSavedPredictions(matches) {
       if (panel.textContent.includes("Checking saved prediction")) panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Could not check saved predictions. Refresh fixtures.</b></div>';
     });
   }
+}
+function renderMatchIntelligencePanel(panel, fixtureId) {
+  const saved = savedMatchIntelligence[fixtureId] || {};
+  const history = matchHistoryMarkup[fixtureId] || "";
+  const player = saved.playerWatch ? playerWatchMarkup(saved.playerWatch) :
+    '<section class="player-watch"><h4>INJURIES, SUSPENSIONS & PLAYER AVAILABILITY</h4><p>Player availability information has not been returned for this fixture yet.</p></section>';
+  const form = saved.teamIntelligence ? teamIntelligenceMarkup(saved.teamIntelligence) :
+    '<section class="team-intelligence"><h4>RECENT TEAM FORM</h4><p>Recent form data is not available yet.</p></section>';
+  const quality = saved.dataQuality ? dataQualityMarkup(saved.dataQuality) : "";
+  panel.innerHTML = '<div class="match-intelligence-stack">' +
+    (history || '<section class="h2h-history"><h4>HEAD-TO-HEAD</h4><p>Verified previous meetings are not available yet.</p></section>') +
+    '<div class="match-intelligence-heading"><span>TEAM NEWS & MATCH INTELLIGENCE</span><small>Verified information only</small></div>' +
+    player + form + quality +
+    '<p class="match-intelligence-footnote">Unavailable data is marked clearly; it is never treated as confirmation that a player is fit or available.</p>' +
+    '</div>';
 }
 function predictionOptionsMarkup(period, data) {
   if (!data || !Array.isArray(data.options) || !data.options.length) {
