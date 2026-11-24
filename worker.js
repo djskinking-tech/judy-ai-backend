@@ -724,7 +724,6 @@ export default {
 
     if (url.pathname === "/api/head-to-head") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
-      if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId") || "";
       if (/^openligadb:\d+$/.test(fixtureId)) {
         try {
@@ -804,6 +803,7 @@ export default {
           return reply({ app: "JUDY AI", success: false, error: "Could not load verified OpenLigaDB head-to-head history.", details: error.message || null }, 502);
         }
       }
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
       if (!/^\d+$/.test(fixtureId)) return reply({ app: "JUDY AI", success: false, error: "A valid fixtureId is required for head-to-head history." }, 400);
       try {
         const fixtureRows = await sportmonksRequest(env, "fixtures/" + fixtureId, { include: "participants" });
