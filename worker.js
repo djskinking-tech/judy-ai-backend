@@ -1661,6 +1661,7 @@ export default {
       let fixtureSource = "Sportmonks";
       let fallbackNote = null;
       const openLigaDiagnostics = [];
+      const openLigaCatalogueDiagnostics = { httpStatus: null, cacheHit: false, discovered: 0, added: 0 };
       if (!matches.length) {
         const openLigaRows = [];
         const season = Number(date.slice(0, 4)) - (Number(date.slice(5, 7)) < 7 ? 1 : 0);
@@ -1672,7 +1673,6 @@ export default {
         ];
         // Discover additional competitions from OpenLigaDB instead of guessing
         // shortcuts. Cache the season catalogue for 24 hours and limit requests.
-        let openLigaCatalogueDiagnostics = { httpStatus: null, cacheHit: false, discovered: 0, added: 0 };
         try {
           const catalogueKey = new Request("https://judy-ai-cache.example/openligadb/available/" + season);
           const cachedCatalogue = await caches.default.match(catalogueKey);
