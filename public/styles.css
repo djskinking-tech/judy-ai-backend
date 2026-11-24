@@ -367,3 +367,20 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .lineup-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:14px}
 .lineup-heading small{font-size:9px;color:var(--muted)}
 .player-watch-teams b{font-size:9px;color:var(--green);letter-spacing:.06em}
+
+
+/* Player watchlist and club standouts */
+.club-player-spotlight{display:grid;gap:10px;margin:0;padding:13px;border:1px solid #315448;border-radius:12px;background:linear-gradient(145deg,#10241f,#0b1724)}
+.club-player-spotlight h4{margin:2px 0;color:var(--green);font-size:10px;letter-spacing:.08em}
+.club-player-team{padding:10px;border:1px solid #29445b;border-radius:10px;background:#0d1b2a}
+.club-player-team>strong{display:block;margin-bottom:9px;font-size:11px;color:#e7eef7}
+.club-player-columns{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.club-player-columns>section{min-width:0;padding:8px;border-radius:8px;background:#101f2b}
+.club-player-columns>section>b{display:block;margin-bottom:6px;color:var(--green);font-size:8px;letter-spacing:.07em}
+.club-player-columns ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+.club-player-columns li{display:grid;gap:3px;padding-bottom:6px;border-bottom:1px solid #263b50}
+.club-player-columns li:last-child{padding-bottom:0;border-bottom:0}
+.club-player-columns li strong{font-size:10px;overflow-wrap:anywhere}
+.club-player-columns li span,.club-player-columns li small,.club-player-empty{font-size:9px;line-height:1.45;color:var(--muted)}
+.club-player-spotlight>small{font-size:9px;line-height:1.5;color:var(--muted)}
+@media(max-width:520px){.club-player-columns{grid-template-columns:1fr}}
