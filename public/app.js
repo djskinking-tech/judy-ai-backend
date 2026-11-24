@@ -55,6 +55,90 @@ function toggleSettings(open) {
   if (shouldOpen) settingsPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+const savedPredictionList = document.getElementById("saved-prediction-list");
+const savedPredictionsStatus = document.getElementById("saved-predictions-status");
+const refreshSavedPredictionsButton = document.getElementById("refresh-saved-predictions");
+let savedPredictionsTimer = null;
+
+function savedPredictionScores(predictions, period) {
+  const options = predictions && predictions[period] && Array.isArray(predictions[period].options)
+    ? predictions[period].options.slice(0, 2) : [];
+  if (!options.length) return "Not available";
+  return options.map(function (option, index) {
+    const score = option.score || "—";
+    const probability = option.probability != null ? " (" + option.probability + "%)" : "";
+    return (index + 1) + ". " + score + probability;
+  }).join("  ·  ");
+}
+function savedPredictionEvaluation(record, period) {
+  const evaluation = record.evaluation || {};
+  const model = evaluation.v2_1 || evaluation.v1 || {};
+  const result = model[period] || {};
+  if (result.topTwo === true) return "WON · top two";
+  if (result.topTwo === false) return "LOST · top two";
+  return "PENDING";
+}
+function renderSavedPredictions(records) {
+  if (!savedPredictionList) return;
+  if (!records.length) {
+    savedPredictionList.innerHTML = '<div class="saved-prediction-empty">No saved predictions yet. Generate predictions for upcoming matches and they will be kept here.</div>';
+    return;
+  }
+  savedPredictionList.innerHTML = records.map(function (record) {
+    const fixture = record.fixture || {};
+    const matchName = fixture.name || [fixture.homeTeam, fixture.awayTeam].filter(Boolean).join(" vs ") || ("Match " + (record.fixtureId || ""));
+    const completed = record.status === "completed";
+    const actual = record.actual || {};
+    const htActual = actual.halfTime || "—";
+    const ftActual = actual.fullTime || "—";
+    const htOutcome = savedPredictionEvaluation(record, "halfTime");
+    const ftOutcome = savedPredictionEvaluation(record, "fullTime");
+    const statusLabel = completed ? "FINISHED" : "SAVED · " + (record.status || "PENDING").toUpperCase();
+    const captured = record.capturedAt ? new Date(record.capturedAt) : null;
+    const capturedLabel = captured && !Number.isNaN(captured.getTime())
+      ? new Intl.DateTimeFormat("en-KE", {timeZone:"Africa/Nairobi", day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit"}).format(captured) + " EAT"
+      : "Capture time unavailable";
+    return '<article class="saved-prediction-card">' +
+      '<div class="saved-prediction-card-head"><div><strong>' + escapeHtml(matchName) + '</strong>' +
+      '<span>' + escapeHtml(fixture.league || "League TBC") + ' · ' + escapeHtml(fixture.startingAt || "Kick-off TBC") + '</span></div>' +
+      '<b class="' + (completed ? "saved-finished" : "saved-pending") + '">' + escapeHtml(statusLabel) + '</b></div>' +
+      '<div class="saved-prediction-periods">' +
+      '<div><span>HALF-TIME · ORIGINAL</span><strong>' + escapeHtml(savedPredictionScores(record.predictions, "halfTime")) + '</strong>' +
+      '<small>Actual: ' + escapeHtml(htActual) + ' · ' + escapeHtml(htOutcome) + '</small></div>' +
+      '<div><span>FULL-TIME · ORIGINAL</span><strong>' + escapeHtml(savedPredictionScores(record.predictions, "fullTime")) + '</strong>' +
+      '<small>Actual: ' + escapeHtml(ftActual) + ' · ' + escapeHtml(ftOutcome) + '</small></div></div>' +
+      '<div class="saved-prediction-lock">🔒 Original prediction captured ' + escapeHtml(capturedLabel) + ' · never replaced by live scores</div>' +
+      '</article>';
+  }).join("");
+}
+async function loadSavedPredictions() {
+  if (!savedPredictionList) return;
+  if (refreshSavedPredictionsButton) {
+    refreshSavedPredictionsButton.disabled = true;
+    refreshSavedPredictionsButton.textContent = "Refreshing…";
+  }
+  try {
+    const response = await fetch("/api/tracking", {headers: {"Accept":"application/json"}});
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || "Saved predictions are unavailable.");
+    const records = Array.isArray(payload.records) ? payload.records : [];
+    renderSavedPredictions(records);
+    if (savedPredictionsStatus) {
+      savedPredictionsStatus.textContent = records.length + " saved prediction" + (records.length === 1 ? "" : "s") +
+        " · " + Number(payload.pendingPredictions || 0) + " awaiting results · " +
+        Number(payload.completedPredictions || 0) + " finished";
+    }
+  } catch (error) {
+    if (savedPredictionsStatus) savedPredictionsStatus.textContent = error.message || "Could not load saved predictions.";
+    savedPredictionList.innerHTML = '<div class="saved-prediction-empty">Your saved records could not be reached right now. They have not been deleted. Try refreshing.</div>';
+  } finally {
+    if (refreshSavedPredictionsButton) {
+      refreshSavedPredictionsButton.disabled = false;
+      refreshSavedPredictionsButton.textContent = "Refresh predictions";
+    }
+  }
+}
+
 const liveScoreList = document.getElementById("live-score-list");
 const liveScoreUpdated = document.getElementById("live-score-updated");
 const refreshLiveScoresButton = document.getElementById("refresh-live-scores");
@@ -717,6 +801,11 @@ dateInput.addEventListener("change", function () {
   });
 });
 if (refreshLiveScoresButton) refreshLiveScoresButton.addEventListener("click", loadLiveScores);
+if (refreshSavedPredictionsButton) refreshSavedPredictionsButton.addEventListener("click", loadSavedPredictions);
+loadSavedPredictions();
+savedPredictionsTimer = setInterval(function () {
+  if (!document.hidden) loadSavedPredictions();
+}, 60000);
 loadLiveScores();
 liveScoreTimer = setInterval(function () {
   if (appSettings.autoRefreshLiveScores && !document.hidden) loadLiveScores();
