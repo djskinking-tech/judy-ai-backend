@@ -119,5 +119,7 @@
     }
   }
   refreshButton.addEventListener("click", loadPerformance);
+  const performanceSearch = document.getElementById("performance-search");
+  if (performanceSearch) performanceSearch.addEventListener("input", function () { renderRecords(allRecords); });
   loadPerformance();
 })();
