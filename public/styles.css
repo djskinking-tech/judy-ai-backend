@@ -328,3 +328,15 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
   body.print-daily-report .daily-report-scores span { color: #222 !important; }
   body.print-daily-report .daily-report-empty { color: #333 !important; border-color: #aaa !important; }
 }
+
+
+.odds-win-chances{margin:8px 0;padding:10px;border:1px solid #315448;border-radius:10px;background:#0c201b}
+.odds-win-chances>strong{display:block;color:var(--muted);font-size:9px;letter-spacing:.8px;margin-bottom:8px}
+.odds-chance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.odds-chance{display:grid;gap:4px;padding:8px 5px;border:1px solid var(--line);border-radius:8px;text-align:center;background:#101d2b}
+.odds-chance span{font-size:10px;color:var(--muted)}
+.odds-chance b{font-size:17px;color:var(--text);font-variant-numeric:tabular-nums}
+.odds-chance small{font-size:8px;line-height:1.3;color:var(--muted)}
+.odds-chance-highest{border-color:var(--green);background:#123126}
+.odds-chance-highest b,.odds-chance-highest small{color:var(--green)}
+@media(max-width:420px){.odds-chance b{font-size:15px}.odds-chance{padding:7px 3px}}
