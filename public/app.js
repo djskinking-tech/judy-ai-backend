@@ -320,7 +320,8 @@ function renderMatches(matches) {
         '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
-      '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span></div>' +
+      '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span>' +
+      (match.fixtureSource ? '<span>' + escapeHtml(match.fixtureSource) + '</span>' : '') + '</div>' +
       '<div class="fixture-teams">' +
         '<div class="team">' + logoMarkup(teamLogo(match,"home")) + '<div class="team-name">' + escapeHtml(home) + '</div></div>' +
         '<div class="versus fixture-score">' + escapeHtml(fixtureFinalScore(match) || "VS") + '</div>' +
