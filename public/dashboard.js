@@ -30,6 +30,41 @@
       metricCard("HT top two", data.halfTimeTopTwo) +
       '</div></article>';
   }
+
+  function accuracyStats(rows, model) {
+    const fields=[["HT exact","halfTime","exact"],["HT top two","halfTime","topTwo"],["FT exact","fullTime","exact"],["FT top two","fullTime","topTwo"]];
+    return fields.map(function(field){
+      const values=rows.map(function(row){const group=row.evaluation&&row.evaluation[model]&&row.evaluation[model][field[1]];return group&&typeof group[field[2]]==="boolean"?group[field[2]]:null;}).filter(function(value){return value!==null;});
+      const hits=values.filter(Boolean).length;
+      return {label:field[0],hits:hits,total:values.length,pct:values.length?(hits/values.length*100).toFixed(1):"—"};
+    });
+  }
+  function accuracyCards(rows,model){
+    return '<div class="accuracy-stats">'+accuracyStats(rows,model).map(function(stat){
+      return '<div class="accuracy-stat"><span>'+escapeHtml(stat.label)+'</span><strong>'+(stat.total?stat.hits+'/'+stat.total+' · '+stat.pct+'%':'Awaiting data')+'</strong></div>';
+    }).join("")+'</div>';
+  }
+  function renderAccuracyCentre(items){
+    const completed=items.filter(function(item){return item.status==="completed";});
+    const overview=document.getElementById("accuracy-overview"), leagueNode=document.getElementById("accuracy-leagues"), monthNode=document.getElementById("accuracy-months");
+    if(!overview||!leagueNode||!monthNode)return;
+    overview.innerHTML='<div class="accuracy-total"><span>Evaluated matches</span><strong>'+completed.length+'</strong></div>'+
+      '<div class="accuracy-models"><article><h4>V1 baseline</h4>'+accuracyCards(completed,"v1")+'</article><article><h4>Current saved model</h4>'+accuracyCards(completed,"v2_1")+'</article></div>';
+    function groupsBy(keyFn){
+      const groups=new Map();completed.forEach(function(item){const key=keyFn(item);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);});
+      return Array.from(groups.entries()).sort(function(a,b){return b[0].localeCompare(a[0]);});
+    }
+    function draw(node,groups){
+      if(!groups.length){node.innerHTML='<p class="accuracy-empty">No completed matches recorded yet.</p>';return;}
+      node.innerHTML=groups.map(function(entry){return '<article class="accuracy-group"><div class="accuracy-group-head"><strong>'+escapeHtml(entry[0])+'</strong><span>'+entry[1].length+' completed</span></div><b>V1 baseline</b>'+accuracyCards(entry[1],"v1")+'<b>Current saved model</b>'+accuracyCards(entry[1],"v2_1")+'</article>';}).join("");
+    }
+    draw(leagueNode,groupsBy(function(item){return item.fixture&&item.fixture.league||"League not recorded";}));
+    draw(monthNode,groupsBy(function(item){
+      const date=item.completedAt||(item.fixture&&item.fixture.startingAt)||item.capturedAt, parsed=new Date(String(date||"").replace(" ","T"));
+      return Number.isNaN(parsed.getTime())?"Date not recorded":new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Nairobi",year:"numeric",month:"long"}).format(parsed);
+    }));
+  }
+
   function hitLabel(label, hit) {
     if (hit === true) return label + ': WON';
     if (hit === false) return label + ': LOST';
@@ -105,6 +140,7 @@
       modelGrid.innerHTML = renderModel("V1 baseline", metrics.v1 || {}) +
         renderModel("V2.1 experimental", metrics.v2_1 || {});
       renderRecords(Array.isArray(payload.records) ? payload.records : []);
+      renderAccuracyCentre(Array.isArray(payload.records) ? payload.records : []);
       status.textContent = "Updated " + new Intl.DateTimeFormat("en-KE", {
         timeZone:"Africa/Nairobi", hour:"2-digit", minute:"2-digit", hour12:true
       }).format(new Date()) + " EAT · " + completed + " completed, " + pending + " pending.";
