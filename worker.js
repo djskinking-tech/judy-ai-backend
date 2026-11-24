@@ -733,6 +733,16 @@ export default {
           if (!fixtureResponse.ok) return reply({ app: "JUDY AI", success: false, error: "OpenLigaDB fixture lookup failed.", providerStatus: fixtureResponse.status }, 502);
           const target = await fixtureResponse.json();
           if (!target || !target.team1 || !target.team2) return reply({ app: "JUDY AI", success: false, error: "Fixture team details are unavailable for head-to-head history." }, 404);
+          const requestedHome = url.searchParams.get("homeTeam") || "";
+          const requestedAway = url.searchParams.get("awayTeam") || "";
+          const normalizeTeam = value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          if ((requestedHome && normalizeTeam(requestedHome) !== normalizeTeam(target.team1.teamName)) ||
+              (requestedAway && normalizeTeam(requestedAway) !== normalizeTeam(target.team2.teamName))) {
+            return reply({
+              app: "JUDY AI", success: false,
+              error: "The fallback fixture source lists different teams from the corrected match card. JUDY has withheld head-to-head data to avoid comparing the wrong clubs."
+            }, 409);
+          }
           const cache = caches.default;
           async function teamHistory(teamName) {
             const key = new Request("https://judy-ai-cache.example/openligadb/team-history/v1/" + encodeURIComponent(String(teamName || "").trim().toLowerCase()));
