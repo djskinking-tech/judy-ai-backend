@@ -1064,6 +1064,189 @@ export default {
 
     if (url.pathname === "/api/predictions") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      const fixtureId = url.searchParams.get("fixtureId") || "";
+
+      // OpenLigaDB fixtures use their own IDs. Build a transparent fallback
+      // prediction from recent completed team matches; never pass these IDs to Sportmonks.
+      if (/^openligadb:\\d+$/.test(fixtureId)) {
+        try {
+          const saved = await savedPredictionPayload(env, fixtureId);
+          if (saved) return reply(saved);
+          const matchId = fixtureId.split(":")[1];
+          const fixtureResponse = await fetch("https://api.openligadb.de/getmatchdata/" + matchId, {
+            headers: { "Accept": "application/json" }
+          });
+          if (!fixtureResponse.ok) return reply({ success: false, error: "OpenLigaDB fixture lookup failed.", providerStatus: fixtureResponse.status }, 502);
+          const target = await fixtureResponse.json();
+          if (!target || !target.team1 || !target.team2) return reply({ success: false, error: "OpenLigaDB fixture or team data was not found." }, 404);
+          const kickoffText = target.matchDateTimeUTC || target.matchDateTime;
+          const kickoff = kickoffText ? new Date(String(kickoffText).replace(" ", "T")) : null;
+          if (!kickoff || Number.isNaN(kickoff.getTime())) return reply({ success: false, error: "Fixture kick-off time is unavailable; prediction withheld." }, 422);
+          if (target.matchIsFinished || kickoff.getTime() <= Date.now()) {
+            return reply({ success: false, error: "This match has started or finished. JUDY only creates new predictions before kick-off.", fixtureId }, 409);
+          }
+
+          const cache = caches.default;
+          async function teamHistory(teamName) {
+            const safeName = String(teamName || "").trim();
+            const cacheKey = new Request("https://judy-ai-cache.example/openligadb/team-history/v1/" + encodeURIComponent(safeName.toLowerCase()));
+            const cached = await cache.match(cacheKey);
+            if (cached) {
+              const body = await cached.json();
+              return Array.isArray(body) ? body : [];
+            }
+            const endpoint = "https://api.openligadb.de/getmatchesbyteam/" + encodeURIComponent(safeName) + "/20/0";
+            const response = await fetch(endpoint, { headers: { "Accept": "application/json" } });
+            if (!response.ok) throw new Error("OpenLigaDB team-history request failed (HTTP " + response.status + ").");
+            const body = await response.json();
+            const rows = Array.isArray(body) ? body : [];
+            await cache.put(cacheKey, new Response(JSON.stringify(rows), {
+              headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
+            }));
+            return rows;
+          }
+          const [homeRows, awayRows] = await Promise.all([
+            teamHistory(target.team1.teamName),
+            teamHistory(target.team2.teamName)
+          ]);
+          function resultFor(match, period) {
+            const rows = Array.isArray(match && match.matchResults) ? match.matchResults : [];
+            const found = rows.find(row => {
+              const kind = String(row && row.resultTypeKind || "").toLowerCase();
+              const name = String(row && row.resultName || "").toLowerCase();
+              const id = Number(row && row.resultTypeID);
+              return period === "ht"
+                ? kind === "halftime" || id === 1 || /half.?time|halbzeit/.test(name)
+                : kind === "after90minutes" || id === 2 || /full.?time|endergebnis|endstand/.test(name);
+            });
+            if (!found || !Number.isFinite(Number(found.pointsTeam1)) || !Number.isFinite(Number(found.pointsTeam2))) return null;
+            return { home: Number(found.pointsTeam1), away: Number(found.pointsTeam2) };
+          }
+          function formFor(rows, team, side) {
+            const teamId = Number(team.teamId);
+            return (Array.isArray(rows) ? rows : []).filter(match => {
+              if (!match || Number(match.matchID) === Number(target.matchID) || !match.matchIsFinished) return false;
+              const when = new Date(String(match.matchDateTimeUTC || match.matchDateTime || "").replace(" ", "T"));
+              if (Number.isNaN(when.getTime()) || when.getTime() >= kickoff.getTime()) return false;
+              const matchHasTeam = Number((match.team1 && match.team1.teamId) || 0) === teamId ||
+                Number((match.team2 && match.team2.teamId) || 0) === teamId;
+              return matchHasTeam;
+            }).map(match => {
+              const isHome = Number(match.team1 && match.team1.teamId) === teamId;
+              const ft = resultFor(match, "ft");
+              const ht = resultFor(match, "ht");
+              if (!ft) return null;
+              const when = match.matchDateTimeUTC || match.matchDateTime;
+              return {
+                fixtureId: match.matchID,
+                date: when,
+                venue: isHome ? "home" : "away",
+                ft: { scored: isHome ? ft.home : ft.away, conceded: isHome ? ft.away : ft.home },
+                ht: ht ? { scored: isHome ? ht.home : ht.away, conceded: isHome ? ht.away : ht.home } : null
+              };
+            }).filter(Boolean).sort((a,b) => String(b.date).localeCompare(String(a.date))).slice(0,8);
+          }
+          const homeForm = formFor(homeRows, target.team1, "home");
+          const awayForm = formFor(awayRows, target.team2, "away");
+          if (homeForm.length < 3 || awayForm.length < 3) return reply({
+            app: "JUDY AI", success: false, status: "insufficient_history",
+            message: "Not enough verified completed OpenLigaDB results for both teams. At least 3 matches per team are required.",
+            fixtureId, sampleSize: { home: homeForm.length, away: awayForm.length }, minimumRequired: 3,
+            dataSource: "OpenLigaDB"
+          });
+          function weightedPeriod(form, key, venue) {
+            const venueRows = form.filter(row => row.venue === venue && row[key]);
+            const selected = venueRows.length >= 3 ? venueRows : form.filter(row => row[key]);
+            const weighted = field => {
+              let total = 0, weightTotal = 0;
+              for (const row of selected) {
+                const date = new Date(String(row.date || "").replace(" ", "T"));
+                const ageDays = Number.isNaN(date.getTime()) ? 0 : Math.max(0, (kickoff.getTime() - date.getTime()) / 86400000);
+                const weight = Math.exp(-Math.LN2 * ageDays / 45);
+                total += row[key][field] * weight;
+                weightTotal += weight;
+              }
+              return weightTotal ? total / weightTotal : null;
+            };
+            return { scored: weighted("scored"), conceded: weighted("conceded"), matches: selected.length, venueMatches: venueRows.length, venueSplitUsed: venueRows.length >= 3 };
+          }
+          const hft = weightedPeriod(homeForm, "ft", "home");
+          const aft = weightedPeriod(awayForm, "ft", "away");
+          const hht = weightedPeriod(homeForm, "ht", "home");
+          const aht = weightedPeriod(awayForm, "ht", "away");
+          const expected = (attack, defence) => Math.max(0.05, Math.min(4.5, (attack + defence) / 2));
+          const ftHome = expected(hft.scored, aft.conceded);
+          const ftAway = expected(aft.scored, hft.conceded);
+          const htReady = hht.matches >= 3 && aht.matches >= 3 &&
+            hht.scored !== null && hht.conceded !== null && aht.scored !== null && aht.conceded !== null;
+          const htHome = htReady ? expected(hht.scored, aht.conceded) : null;
+          const htAway = htReady ? expected(aht.scored, hht.conceded) : null;
+          const recentBlock = (form, name) => ({
+            team: name, matchesAnalysed: form.length,
+            lastFive: form.slice(0,5).map(row => ({
+              date: row.date, goalsFor: row.ft.scored, goalsAgainst: row.ft.conceded,
+              outcome: row.ft.scored > row.ft.conceded ? "W" : row.ft.scored < row.ft.conceded ? "L" : "D"
+            }))
+          });
+          const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
+          const result = {
+            app: "JUDY AI", success: true, experimental: true,
+            validationStatus: "OpenLigaDB fallback model; not yet independently validated",
+            provider: "OpenLigaDB recent team results",
+            fixture: {
+              id: fixtureId, name: target.team1.teamName + " vs " + target.team2.teamName,
+              startingAt: kickoff.toISOString(), league: target.leagueName || "Football",
+              homeTeam: target.team1.teamName, awayTeam: target.team2.teamName,
+              fixtureSource: "OpenLigaDB"
+            },
+            sampleSize: { home: homeForm.length, away: awayForm.length },
+            dataQuality: {
+              historyWindowDays: 180,
+              recentMatchesUsed: { home: homeForm.length, away: awayForm.length },
+              firstHalfMatchesAvailable: { home: homeForm.filter(row => row.ht).length, away: awayForm.filter(row => row.ht).length },
+              venueSpecificMatches: { homeTeamAtHome: hft.venueMatches, awayTeamAway: aft.venueMatches },
+              confidenceLevel: confidence,
+              warnings: [
+                "Community-maintained OpenLigaDB history may be incomplete or delayed.",
+                ...(Math.min(homeForm.length, awayForm.length) < 6 ? ["Small recent-form sample; confidence is low."] : []),
+                ...(!htReady ? ["Half-time score history is incomplete; HT predictions are withheld."] : []),
+                "Player availability, injuries and confirmed lineups are not supplied by this model."
+              ],
+              interpretation: "Confidence describes the size of the available historical sample, not the chance of a correct score."
+            },
+            teamIntelligence: {
+              home: recentBlock(homeForm, target.team1.teamName),
+              away: recentBlock(awayForm, target.team2.teamName),
+              source: "OpenLigaDB completed team matches",
+              limitations: ["No verified injury, suspension or lineup feed is connected."]
+            },
+            playerWatch: {
+              status: "limited", absences: [],
+              lineups: { status: "not_available", label: "Not available", home: [], away: [] },
+              source: "No player availability feed connected",
+              note: "No player availability or lineup information is inferred."
+            },
+            confidence,
+            predictions: {
+              halfTime: htReady ? { method: "Recency-weighted Poisson from completed OpenLigaDB first-half results", expectedGoals: { home: Number(htHome.toFixed(2)), away: Number(htAway.toFixed(2)) }, options: topScoreOptions(htHome, htAway) } : null,
+              fullTime: { method: "Recency-weighted Poisson from completed OpenLigaDB full-time results", expectedGoals: { home: Number(ftHome.toFixed(2)), away: Number(ftAway.toFixed(2)) }, options: topScoreOptions(ftHome, ftAway) }
+            },
+            note: "Experimental fallback estimates from community-maintained match history. Not guaranteed. No bookmaker odds are included."
+          };
+          let trackingSaveStatus = "storage_not_configured";
+          if (env.JUDY_PREDICTIONS) {
+            try { trackingSaveStatus = await storePrediction(env, result); }
+            catch { trackingSaveStatus = "save_failed"; }
+          }
+          result.tracking = { saveStatus: trackingSaveStatus };
+          return reply(result);
+        } catch (error) {
+          return reply({ app: "JUDY AI", success: false, error: error.message || "OpenLigaDB prediction failed." }, 502);
+        }
+      }
+
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId");
       if (!fixtureId || !/^\d+$/.test(fixtureId)) {
