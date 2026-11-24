@@ -276,7 +276,7 @@ function renderOddsMarkup(payload) {
 async function loadFixtureOdds(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("odds-" + fixtureId);
-  if (!panel || !/^\d+$/.test(fixtureId || "")) return;
+  if (!panel || !(/^openligadb:\d+$/.test(fixtureId || "") || /^\d+$/.test(fixtureId || ""))) return;
   if (panel.dataset.loaded === "true") {
     panel.hidden = !panel.hidden;
     button.textContent = panel.hidden ? "Show odds" : "Hide odds";
