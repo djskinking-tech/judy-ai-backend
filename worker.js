@@ -1575,8 +1575,8 @@ export default {
     }
 
     const cache = caches.default;
-    // v10 invalidates cached API responses created before competition-name diagnostics.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v10/" + date);
+    // v11 invalidates cached API responses and exposes a distinct build marker.
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v11/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -1953,7 +1953,8 @@ export default {
       const result = {
         app: "JUDY AI",
         success: true,
-        backendVersion: "openfootball-fallback-v2",
+        backendVersion: "openfootball-fallback-v3",
+        buildMarker: "competition-diagnostics-2026-11-24",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
