@@ -35,43 +35,57 @@
     if (hit === false) return label + ': LOST';
     return label + ': PENDING';
   }
+  let allRecords = [];
   function renderRecords(items) {
-    if (!items.length) {
-      records.innerHTML = '<div class="dashboard-empty">No predictions have been saved yet. Generate a prediction for an upcoming match to start tracking.</div>';
+    allRecords = Array.isArray(items) ? items : [];
+    const query = (document.getElementById("performance-search")?.value || "").trim().toLowerCase();
+    const filtered = allRecords.filter(function (item) {
+      const fixture = item.fixture || {};
+      const text = [fixture.name, fixture.homeTeam, fixture.awayTeam, fixture.league, item.fixtureId]
+        .filter(Boolean).join(" ").toLowerCase();
+      return !query || text.includes(query);
+    });
+    if (!filtered.length) {
+      records.innerHTML = '<div class="dashboard-empty">' +
+        (allRecords.length ? 'No prediction records match that search.' : 'No predictions have been saved yet. Generate a prediction for an upcoming match to start tracking.') +
+        '</div>';
       return;
     }
-    records.innerHTML = items.map(function (item) {
+    records.innerHTML = filtered.map(function (item) {
       const fixture = item.fixture || {};
       const name = fixture.name || ((fixture.homeTeam || "Home") + " vs " + (fixture.awayTeam || "Away"));
-      // The API stores actual scores as strings such as "2-1", not {home, away} objects.
-      const ft = item.actual && item.actual.fullTime ? item.actual.fullTime : null;
-      const ht = item.actual && item.actual.halfTime ? item.actual.halfTime : null;
-      const actualText = item.status === "completed"
-        ? "FT " + (ft || "—") + " · HT " + (ht || "—")
-        : "Result pending";
-      const evaluation = item.evaluation && item.evaluation.v2_1 ? item.evaluation.v2_1 : {};
-      const ftHit = evaluation.fullTime ? evaluation.fullTime.topTwo : null;
-      const htHit = evaluation.halfTime ? evaluation.halfTime.topTwo : null;
+      const actual = item.actual || {};
+      const evaluation = item.evaluation || {};
       const predictions = item.predictions || {};
-      function scores(period) {
-        const options = predictions[period] && Array.isArray(predictions[period].options)
-          ? predictions[period].options : [];
+      const baseline = item.baselineV1 || {};
+      function scoreText(source, period) {
+        const options = source && source[period] && Array.isArray(source[period].options) ? source[period].options : [];
         return options.length ? options.map(function (option) {
           return String(option.score || "—") + (option.probability != null ? " (" + option.probability + "%)" : "");
-        }).join(" / ") : "Not saved";
+        }).join(" · ") : "Not available";
       }
-      const predictionText = "HT: " + scores("halfTime") + " · FT: " + scores("fullTime");
-      const outcomeText = item.status === "completed"
-        ? hitLabel("FT top two", ftHit) + " · " + hitLabel("HT top two", htHit)
-        : "Waiting for final result";
-      return '<article class="record-row"><div><strong>' + escapeHtml(name) +
-        '</strong><span>' + escapeHtml(fixture.league || "League TBC") + ' · ' +
-        escapeHtml(fixture.startingAt || "Kick-off TBC") + '</span><small class="record-prediction">' +
-        escapeHtml(predictionText) + '</small></div><div class="record-result ' +
-        (item.status === "completed" ? "is-complete" : "") + '">' + escapeHtml(actualText) +
-        '<small class="record-outcome">' + escapeHtml(outcomeText) + '</small></div><span class="record-status ' +
-        (item.status === "completed" ? "is-complete" : "") + '">' +
-        escapeHtml(item.status === "completed" ? "RESULTS RECORDED" : "PENDING") + '</span></article>';
+      function hitText(model, period) {
+        const result = evaluation[model] && evaluation[model][period];
+        if (!result || result.topTwo == null) return "Awaiting result";
+        return result.topTwo ? "TOP TWO HIT" : "MISSED TOP TWO";
+      }
+      function modelPanel(label, modelKey, source) {
+        const isHit = function (period) {
+          const result = evaluation[modelKey] && evaluation[modelKey][period];
+          return result && result.topTwo === true ? "hit" : result && result.topTwo === false ? "miss" : "waiting";
+        };
+        return '<div class="record-model"><strong>' + escapeHtml(label) + '</strong>' +
+          '<div><span>HT prediction</span><b>' + escapeHtml(scoreText(source, "halfTime")) + '</b><small class="' + isHit("halfTime") + '">' + escapeHtml(hitText(modelKey, "halfTime")) + '</small></div>' +
+          '<div><span>FT prediction</span><b>' + escapeHtml(scoreText(source, "fullTime")) + '</b><small class="' + isHit("fullTime") + '">' + escapeHtml(hitText(modelKey, "fullTime")) + '</small></div></div>';
+      }
+      const isCompleted = item.status === "completed";
+      return '<article class="record-row record-comparison"><div class="record-match-head"><div><strong>' + escapeHtml(name) +
+        '</strong><span>' + escapeHtml(fixture.league || "League TBC") + ' · ' + escapeHtml(fixture.startingAt || "Kick-off TBC") +
+        '</span></div><span class="record-status ' + (isCompleted ? "is-complete" : "") + '">' + (isCompleted ? "RESULT RECORDED" : "PENDING") + '</span></div>' +
+        '<div class="record-model-grid">' + modelPanel("V1 baseline", "v1", baseline) +
+        modelPanel(item.experimental ? "Experimental model · V2.2" : "V2.1 model", "v2_1", predictions) + '</div>' +
+        '<div class="record-actual"><span>ACTUAL RESULT</span><strong>HT ' + escapeHtml(actual.halfTime || "—") +
+        ' · FT ' + escapeHtml(actual.fullTime || "—") + '</strong></div></article>';
     }).join("");
   }
   async function loadPerformance() {
