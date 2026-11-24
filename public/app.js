@@ -98,7 +98,7 @@ function renderSavedPredictions(records) {
   if (!visibleRecords.length) {
     const message = savedPredictionRecords.length
       ? "No saved matches match your search or filter."
-      : "No saved predictions yet. Generate predictions for upcoming matches and they will be kept here.";
+      : "No saved predictions yet. JUDY AI checks upcoming supported fixtures automatically and saves predictions when available.";
     savedPredictionList.innerHTML = '<div class="saved-prediction-empty">' + escapeHtml(message) + '</div>';
     return;
   }
