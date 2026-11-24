@@ -120,6 +120,17 @@
           <div id="accuracy-overview" class="accuracy-overview"></div>
           <div class="accuracy-breakdowns"><div><h4>Performance by league</h4><div id="accuracy-leagues"></div></div><div><h4>Monthly performance</h4><div id="accuracy-months"></div></div></div>
         </section>
+        <section id="confidence-centre" class="confidence-centre" aria-live="polite">
+          <p class="eyebrow">PROBABILITY VS REAL RESULTS</p><h3>Confidence &amp; Reliability</h3>
+          <p class="confidence-description">Checks whether the most likely score actually lands. Only completed matches with recorded probabilities and evaluations are included.</p>
+          <div id="confidence-summary" class="confidence-summary"></div>
+          <div class="confidence-model-grid">
+            <article><h4>Current model · HT</h4><div id="confidence-current-ht"></div></article>
+            <article><h4>Current model · FT</h4><div id="confidence-current-ft"></div></article>
+            <article><h4>V1 baseline · HT</h4><div id="confidence-v1-ht"></div></article>
+            <article><h4>V1 baseline · FT</h4><div id="confidence-v1-ft"></div></article>
+          </div>
+        </section>
         <div class="records-heading"><h3>Prediction history</h3><span>V1 vs experimental model</span></div>
         <label class="performance-search-label" for="performance-search">SEARCH PREDICTION HISTORY<input id="performance-search" type="search" placeholder="Search team, league or fixture"></label>
         <div id="prediction-records" class="prediction-records"></div>
