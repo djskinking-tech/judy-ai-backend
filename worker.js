@@ -1576,7 +1576,7 @@ export default {
 
     const cache = caches.default;
     // v3 invalidates the old first-page-only fixture cache.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v3/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v4/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
