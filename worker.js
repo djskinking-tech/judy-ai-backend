@@ -1815,28 +1815,30 @@ export default {
           const lastFive = form.slice(0, 5).map(item => {
             const outcome = item.ft.scored > item.ft.conceded ? "W" :
               item.ft.scored < item.ft.conceded ? "L" : "D";
-            return {
-              date: item.date,
-              fixtureId: item.fixtureId,
-              venue: item.venue || "Unknown",
-              goalsFor: item.ft.scored,
-              goalsAgainst: item.ft.conceded,
-              outcome
-            };
+            return { date: item.date, fixtureId: item.fixtureId, venue: item.venue || "Unknown",
+              goalsFor: item.ft.scored, goalsAgainst: item.ft.conceded, outcome };
           });
+          function venueProfile(place) {
+            const rows = form.filter(item => item.venue === place);
+            const wins = rows.filter(item => item.ft.scored > item.ft.conceded).length;
+            const draws = rows.filter(item => item.ft.scored === item.ft.conceded).length;
+            const losses = rows.filter(item => item.ft.scored < item.ft.conceded).length;
+            return { matches: rows.length, wins, draws, losses,
+              averageGoalsFor: rows.length ? Number(average(rows.map(item => item.ft.scored)).toFixed(2)) : null,
+              averageGoalsAgainst: rows.length ? Number(average(rows.map(item => item.ft.conceded)).toFixed(2)) : null };
+          }
           const venueRows = form.filter(item => item.venue === venue);
           const selected = venueRows.length >= 2 ? venueRows : form;
           const wins = selected.filter(item => item.ft.scored > item.ft.conceded).length;
           const draws = selected.filter(item => item.ft.scored === item.ft.conceded).length;
           const losses = selected.filter(item => item.ft.scored < item.ft.conceded).length;
           return {
-            matchesAnalysed: form.length,
-            lastFive,
+            matchesAnalysed: form.length, lastFive,
             venueSplit: venueRows.length >= 2 ? venue : "All venues (insufficient venue sample)",
-            venueMatches: selected.length,
-            wins, draws, losses,
+            venueMatches: selected.length, wins, draws, losses,
             averageGoalsFor: Number(average(selected.map(item => item.ft.scored)).toFixed(2)),
             averageGoalsAgainst: Number(average(selected.map(item => item.ft.conceded)).toFixed(2)),
+            venueProfiles: { home: venueProfile("home"), away: venueProfile("away") },
             firstHalfDataAvailable: form.filter(item => item.ht).length
           };
         }
