@@ -1695,16 +1695,16 @@ export default {
             }
           }
           openLigaCatalogueDiagnostics.discovered = availableLeagues.length;
-          const wantedCompetition = /serie\\s*a|ligue\\s*1|eredivisie|primeira\\s*liga|europa\\s*league|conference\\s*league|championship|scottish\\s*premier|belgian\\s*(pro|first)|super\\s*league|2\\.?\\s*bundesliga|segunda\\s*division|serie\\s*b|ligue\\s*2/i;
+          const wantedCompetition = /serie\s*a|ligue\s*1|eredivisie|primeira\s*liga|europa\s*league|conference\s*league|championship|scottish\s*premier|belgian\s*(pro|first)|super\s*league|2\\.?\s*bundesliga|segunda\s*division|serie\s*b|ligue\s*2/i;
           const existingShortcuts = new Set(leagues.map(item => item.shortcut.toLowerCase()));
           for (const item of availableLeagues) {
             const shortcut = String(item && item.leagueShortcut || "").trim();
             const name = String(item && item.leagueName || "").trim();
             if (!shortcut || !name || existingShortcuts.has(shortcut.toLowerCase()) || !wantedCompetition.test(name)) continue;
-            const country = /serie\\s*a|serie\\s*b/i.test(name) ? "Italy" :
-              /ligue\\s*1|ligue\\s*2/i.test(name) ? "France" :
+            const country = /serie\s*a|serie\s*b/i.test(name) ? "Italy" :
+              /ligue\s*1|ligue\s*2/i.test(name) ? "France" :
               /eredivisie/i.test(name) ? "Netherlands" :
-              /primeira\\s*liga/i.test(name) ? "Portugal" :
+              /primeira\s*liga/i.test(name) ? "Portugal" :
               /scottish/i.test(name) ? "Scotland" :
               /belgian/i.test(name) ? "Belgium" : "Europe";
             leagues.push({ shortcut, name, country });
