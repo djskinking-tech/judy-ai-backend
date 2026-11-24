@@ -205,3 +205,8 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .data-quality li{margin:3px 0}
 .data-quality p{margin:4px 0 7px;color:#c6d7e5}
 .data-quality small{display:block;color:#94aabe;font-size:9px}
+
+.fixture-source-note{max-width:760px;margin:8px 0 0;padding:10px 12px;border:1px solid #47617c;border-radius:10px;font-size:11px;line-height:1.5;color:var(--muted)}
+.fixture-source-note.source-note-warning{border-color:#8b6a35;background:rgba(139,106,53,.12);color:#f1d7a5}
+.fixture-source-note[hidden]{display:none}
+.fixture-data-note{margin:10px 0 0;padding:7px 9px;border-left:2px solid #7b9fc4;background:rgba(123,159,196,.08);color:var(--muted);font-size:10px;line-height:1.4}
