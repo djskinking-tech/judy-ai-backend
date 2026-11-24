@@ -726,7 +726,75 @@ export default {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
       const fixtureId = url.searchParams.get("fixtureId") || "";
-      if (!/^\\d+$/.test(fixtureId)) return reply({ app: "JUDY AI", success: false, error: "A valid Sportmonks fixtureId is required for head-to-head history." }, 400);
+      if (/^openligadb:\d+$/.test(fixtureId)) {
+        try {
+          const matchId = fixtureId.split(":")[1];
+          const fixtureResponse = await fetch("https://api.openligadb.de/getmatchdata/" + matchId, { headers: { "Accept": "application/json" } });
+          if (!fixtureResponse.ok) return reply({ app: "JUDY AI", success: false, error: "OpenLigaDB fixture lookup failed.", providerStatus: fixtureResponse.status }, 502);
+          const target = await fixtureResponse.json();
+          if (!target || !target.team1 || !target.team2) return reply({ app: "JUDY AI", success: false, error: "Fixture team details are unavailable for head-to-head history." }, 404);
+          const cache = caches.default;
+          async function teamHistory(teamName) {
+            const key = new Request("https://judy-ai-cache.example/openligadb/team-history/v1/" + encodeURIComponent(String(teamName || "").trim().toLowerCase()));
+            const cached = await cache.match(key);
+            if (cached) { const body = await cached.json(); return Array.isArray(body) ? body : []; }
+            const response = await fetch("https://api.openligadb.de/getmatchesbyteam/" + encodeURIComponent(teamName) + "/20/0", { headers: { "Accept": "application/json" } });
+            if (!response.ok) throw new Error("OpenLigaDB team-history request failed (HTTP " + response.status + ").");
+            const rows = await response.json();
+            await cache.put(key, new Response(JSON.stringify(Array.isArray(rows) ? rows : []), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" } }));
+            return Array.isArray(rows) ? rows : [];
+          }
+          function finalScore(match) {
+            const results = Array.isArray(match.matchResults) ? match.matchResults : [];
+            const row = results.find(item => {
+              const kind = String(item.resultTypeKind || "").toLowerCase(), name = String(item.resultName || "").toLowerCase();
+              return kind === "after90minutes" || Number(item.resultTypeID) === 2 || /full.?time|endergebnis|endstand/.test(name);
+            });
+            if (!row || !Number.isFinite(Number(row.pointsTeam1)) || !Number.isFinite(Number(row.pointsTeam2))) return null;
+            return { home: Number(row.pointsTeam1), away: Number(row.pointsTeam2) };
+          }
+          const [homeRows, awayRows] = await Promise.all([teamHistory(target.team1.teamName), teamHistory(target.team2.teamName)]);
+          const awayIds = new Set(awayRows.map(row => Number(row.matchID)));
+          const meetings = homeRows.filter(row => row && Number(row.matchID) !== Number(target.matchID) && row.matchIsFinished && awayIds.has(Number(row.matchID)))
+            .map(row => {
+              const score = finalScore(row);
+              if (!score) return null;
+              const homeId = Number(row.team1 && row.team1.teamId);
+              return {
+                id: row.matchID, date: row.matchDateTimeUTC || row.matchDateTime || null,
+                competition: row.leagueName || row.leagueShortcut || null,
+                homeTeam: row.team1 && row.team1.teamName || "Home",
+                awayTeam: row.team2 && row.team2.teamName || "Away",
+                homeGoals: score.home, awayGoals: score.away,
+                homeTeamPerspective: homeId === Number(target.team1.teamId) ? "home" : "away"
+              };
+            }).filter(Boolean).sort((a,b) => String(b.date).localeCompare(String(a.date))).slice(0,10);
+          const summary = { played: meetings.length, homeTeamWins: 0, draws: 0, awayTeamWins: 0, homeTeamGoals: 0, awayTeamGoals: 0, bothTeamsScored: 0, over25: 0 };
+          meetings.forEach(match => {
+            const hg = match.homeTeamPerspective === "home" ? match.homeGoals : match.awayGoals;
+            const ag = match.homeTeamPerspective === "home" ? match.awayGoals : match.homeGoals;
+            summary.homeTeamGoals += hg; summary.awayTeamGoals += ag;
+            if (hg > ag) summary.homeTeamWins++; else if (hg < ag) summary.awayTeamWins++; else summary.draws++;
+            if (hg > 0 && ag > 0) summary.bothTeamsScored++;
+            if (hg + ag > 2) summary.over25++;
+          });
+          return reply({
+            app: "JUDY AI", success: true, mode: "head_to_head",
+            fixture: { id: fixtureId, homeTeam: target.team1.teamName, awayTeam: target.team2.teamName },
+            summary,
+            rates: {
+              bothTeamsScored: summary.played ? Math.round(summary.bothTeamsScored / summary.played * 100) : null,
+              over25: summary.played ? Math.round(summary.over25 / summary.played * 100) : null,
+              averageGoals: summary.played ? Number(((summary.homeTeamGoals + summary.awayTeamGoals) / summary.played).toFixed(2)) : null
+            },
+            meetings, source: "OpenLigaDB",
+            note: "Historical meetings are context, not a guarantee. Only shared completed fixtures with verified full-time scores are counted."
+          });
+        } catch (error) {
+          return reply({ app: "JUDY AI", success: false, error: "Could not load verified OpenLigaDB head-to-head history.", details: error.message || null }, 502);
+        }
+      }
+      if (!/^\d+$/.test(fixtureId)) return reply({ app: "JUDY AI", success: false, error: "A valid fixtureId is required for head-to-head history." }, 400);
       try {
         const fixtureRows = await sportmonksRequest(env, "fixtures/" + fixtureId, { include: "participants" });
         const fixture = Array.isArray(fixtureRows) ? fixtureRows[0] : fixtureRows;
