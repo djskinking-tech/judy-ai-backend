@@ -1713,14 +1713,23 @@ export default {
                     timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", hour12: true
                   }).format(kickoff) + " EAT"
                 : (row.matchDateTime ? String(row.matchDateTime).slice(11, 16) + " (provider time; timezone unverified)" : "Kick-off time TBC");
+              const homeTeam = row.team1.teamName || "Home team";
+              const rawAwayTeam = row.team2.teamName || "Away team";
+              // Correct a confirmed community-feed error against the official
+              // UEFA fixture list. Keep this narrow and auditable by date/team.
+              const verifiedCorrections = {
+                "2026-11-25|Sabah": { awayTeam: "Barcelona" }
+              };
+              const correction = verifiedCorrections[date + "|" + homeTeam] || null;
               openLigaRows.push({
                 id: "openligadb:" + String(row.matchID),
                 fixtureSource: "OpenLigaDB",
                 predictionsSupported: false,
                 date,
                 kickoffLabel,
-                homeTeam: row.team1.teamName || "Home team",
-                awayTeam: row.team2.teamName || "Away team",
+                homeTeam,
+                awayTeam: correction ? correction.awayTeam : rawAwayTeam,
+                dataNote: correction ? "Opponent corrected against official UEFA fixture list" : null,
                 league: { name: row.leagueName || league.name },
                 country: league.country,
                 status: row.matchIsFinished ? "Finished" : "Scheduled"
