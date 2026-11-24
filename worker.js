@@ -51,7 +51,7 @@ async function sportmonksRequest(env, path, params = {}, options = {}) {
 
   // Historical fixture and team-history responses are effectively immutable.
   // Cache them for 30 days; keep fixture detail and date listings fresher.
-  const ttl = path.startsWith("fixtures/between/") ? 2592000 :
+  const ttl = (path.startsWith("fixtures/between/") || path.startsWith("fixtures/head-to-head/")) ? 2592000 :
     (/^fixtures\/\d+$/.test(path) ? 21600 : 300);
   if (!options.bypassCache) await cache.put(cacheKey, new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + ttl }
@@ -719,6 +719,84 @@ export default {
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
       });
+    }
+
+
+    if (url.pathname === "/api/head-to-head") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      if (!env.SPORTMONKS_API_TOKEN) return reply({ app: "JUDY AI", success: false, error: "Sportmonks API token is not configured" }, 500);
+      const fixtureId = url.searchParams.get("fixtureId") || "";
+      if (!/^\\d+$/.test(fixtureId)) return reply({ app: "JUDY AI", success: false, error: "A valid Sportmonks fixtureId is required for head-to-head history." }, 400);
+      try {
+        const fixtureRows = await sportmonksRequest(env, "fixtures/" + fixtureId, { include: "participants" });
+        const fixture = Array.isArray(fixtureRows) ? fixtureRows[0] : fixtureRows;
+        const participants = fixture && Array.isArray(fixture.participants) ? fixture.participants : [];
+        const home = participants.find(item => item.meta && item.meta.location === "home");
+        const away = participants.find(item => item.meta && item.meta.location === "away");
+        if (!home || !away || !home.id || !away.id) return reply({ app: "JUDY AI", success: false, error: "Team IDs were not supplied for this fixture; head-to-head history cannot be verified." }, 422);
+        const historicalRows = await sportmonksRequest(env, "fixtures/head-to-head/" + encodeURIComponent(home.id) + "/" + encodeURIComponent(away.id), {
+          include: "participants;scores;state;league", per_page: "10", page: "1"
+        });
+        const rows = Array.isArray(historicalRows) ? historicalRows : [];
+        const completed = rows.filter(match => {
+          const state = match.state || {};
+          const label = String(state.short_name || state.state || state.name || "").toLowerCase();
+          return ["ft", "aet", "pen", "finished", "ended", "after extra time", "after penalties"].some(term => label === term || label.includes(term));
+        }).slice(0, 10);
+        function scoreFor(match, teamId) {
+          const scores = Array.isArray(match.scores) ? match.scores : [];
+          const teamRows = scores.filter(row => Number(row.participant_id) === Number(teamId) && row.score && row.score.goals != null);
+          if (!teamRows.length) return null;
+          const finalRow = teamRows.find(row => ["CURRENT", "FULL_TIME", "FT"].includes(String(row.description || "").toUpperCase().replace(/[\\s-]+/g, "_")));
+          return Number((finalRow || teamRows[teamRows.length - 1]).score.goals);
+        }
+        const meetings = completed.map(match => {
+          const teams = Array.isArray(match.participants) ? match.participants : [];
+          const matchHome = teams.find(item => item.meta && item.meta.location === "home");
+          const matchAway = teams.find(item => item.meta && item.meta.location === "away");
+          const homeId = matchHome && matchHome.id, awayId = matchAway && matchAway.id;
+          const homeGoals = homeId == null ? null : scoreFor(match, homeId);
+          const awayGoals = awayId == null ? null : scoreFor(match, awayId);
+          if (homeGoals == null || awayGoals == null) return null;
+          return {
+            id: match.id, date: match.starting_at || null,
+            competition: match.league && match.league.name || null,
+            homeTeam: matchHome && matchHome.name || "Home",
+            awayTeam: matchAway && matchAway.name || "Away",
+            homeGoals, awayGoals,
+            homeTeamPerspective: Number(homeId) === Number(home.id) ? "home" : "away"
+          };
+        }).filter(Boolean);
+        const summary = { played: meetings.length, homeTeamWins: 0, draws: 0, awayTeamWins: 0, homeTeamGoals: 0, awayTeamGoals: 0, bothTeamsScored: 0, over25: 0 };
+        meetings.forEach(match => {
+          const hg = match.homeTeamPerspective === "home" ? match.homeGoals : match.awayGoals;
+          const ag = match.homeTeamPerspective === "home" ? match.awayGoals : match.homeGoals;
+          summary.homeTeamGoals += hg; summary.awayTeamGoals += ag;
+          if (hg > ag) summary.homeTeamWins++; else if (hg < ag) summary.awayTeamWins++; else summary.draws++;
+          if (hg > 0 && ag > 0) summary.bothTeamsScored++;
+          if (hg + ag > 2) summary.over25++;
+        });
+        return reply({
+          app: "JUDY AI", success: true, mode: "head_to_head",
+          fixture: { id: fixtureId, homeTeam: home.name || "Home", awayTeam: away.name || "Away" },
+          summary,
+          rates: {
+            bothTeamsScored: summary.played ? Math.round(summary.bothTeamsScored / summary.played * 100) : null,
+            over25: summary.played ? Math.round(summary.over25 / summary.played * 100) : null,
+            averageGoals: summary.played ? Number(((summary.homeTeamGoals + summary.awayTeamGoals) / summary.played).toFixed(2)) : null
+          },
+          meetings,
+          source: "Sportmonks",
+          note: "Historical meetings are context, not a guarantee of the next result. Only completed matches with verified scores are counted."
+        });
+      } catch (error) {
+        return reply({
+          app: "JUDY AI", success: false,
+          error: error && error.status === 429 ? "Head-to-head history is temporarily rate-limited. Please retry shortly." : "Could not load verified head-to-head history.",
+          providerStatus: error && error.status || null,
+          retryAfterSeconds: error && error.retryAfterSeconds || null
+        }, error && error.status === 429 ? 429 : 502);
+      }
     }
 
     if (url.pathname === "/api/live-scores") {
