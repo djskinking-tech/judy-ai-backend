@@ -1195,7 +1195,7 @@ export default {
               })
               .filter(f => f.ft)
               .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-              .slice(0, 8);
+              .slice(0, 10);
           }
 
           const homeForm = recentForm(homeHistory, homeTeam.id);
@@ -1426,7 +1426,7 @@ export default {
                 ft: { scored: isHome ? ft.home : ft.away, conceded: isHome ? ft.away : ft.home },
                 ht: ht ? { scored: isHome ? ht.home : ht.away, conceded: isHome ? ht.away : ht.home } : null
               };
-            }).filter(Boolean).sort((a,b) => String(b.date).localeCompare(String(a.date))).slice(0,8);
+            }).filter(Boolean).sort((a,b) => String(b.date).localeCompare(String(a.date))).slice(0,10);
           }
           const homeForm = formFor(homeRows, target.team1, "home");
           const awayForm = formFor(awayRows, target.team2, "away");
@@ -1470,7 +1470,11 @@ export default {
               outcome: row.ft.scored > row.ft.conceded ? "W" : row.ft.scored < row.ft.conceded ? "L" : "D"
             }))
           });
-          const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
+          const firstHalfHomeCount = homeForm.filter(row => row.ht).length;
+        const firstHalfAwayCount = homeForm.filter(row => row.ht).length;
+        const confidence = Math.min(homeForm.length, awayForm.length) >= 10 &&
+          hft.venueMatches >= 3 && aft.venueMatches >= 3 &&
+          firstHalfHomeCount >= 6 && firstHalfAwayCount >= 6 ? "Moderate" : "Low";
           const result = {
             app: "JUDY AI", success: true, experimental: true,
             validationStatus: "OpenLigaDB fallback model; not yet independently validated",
@@ -1485,12 +1489,15 @@ export default {
             dataQuality: {
               historyWindowDays: 180,
               recentMatchesUsed: { home: homeForm.length, away: awayForm.length },
-              firstHalfMatchesAvailable: { home: homeForm.filter(row => row.ht).length, away: awayForm.filter(row => row.ht).length },
+              sampleTargets: { recentMatchesPerTeam: 10, firstHalfMatchesPerTeam: 6, venueMatchesPerTeam: 3 },
+              firstHalfMatchesAvailable: { home: firstHalfHomeCount, away: firstHalfAwayCount },
               venueSpecificMatches: { homeTeamAtHome: hft.venueMatches, awayTeamAway: aft.venueMatches },
               confidenceLevel: confidence,
               warnings: [
                 "Community-maintained OpenLigaDB history may be incomplete or delayed.",
-                ...(Math.min(homeForm.length, awayForm.length) < 6 ? ["Small recent-form sample; confidence is low."] : []),
+                ...(Math.min(homeForm.length, awayForm.length) < 10 ? ["Recent-form target is 10 matches per team; the available sample is smaller."] : []),
+                ...((hft.venueMatches < 3 || aft.venueMatches < 3) ? ["At least one home/away venue sample has fewer than 3 matches; all-venue results are used."] : []),
+                ...((firstHalfHomeCount < 6 || firstHalfAwayCount < 6) ? ["At least one team has fewer than 6 verified first-half results."] : []),
                 ...(!htReady ? ["Half-time score history is incomplete; HT predictions are withheld."] : []),
                 "Player availability, injuries and confirmed lineups are not supplied by this model."
               ],
@@ -1770,6 +1777,7 @@ export default {
           dataQuality: {
             historyWindowDays: 180,
             recentMatchesUsed: { home: homeForm.length, away: awayForm.length },
+            sampleTargets: { recentMatchesPerTeam: 10, firstHalfMatchesPerTeam: 6, venueMatchesPerTeam: 3 },
             firstHalfMatchesAvailable: {
               home: homeForm.filter(item => item.ht).length,
               away: awayForm.filter(item => item.ht).length
@@ -1780,8 +1788,12 @@ export default {
             },
             confidenceLevel: confidence,
             warnings: [
-              ...(Math.min(homeForm.length, awayForm.length) < 6
-                ? ["Small recent-form sample; confidence is low."] : []),
+              ...(Math.min(homeForm.length, awayForm.length) < 10
+                ? ["Recent-form target is 10 matches per team; the available sample is smaller."] : []),
+              ...((hft.venueMatches < 3 || aft.venueMatches < 3)
+                ? ["At least one home/away venue sample has fewer than 3 matches; all-venue results are used."] : []),
+              ...((firstHalfHomeCount < 6 || firstHalfAwayCount < 6)
+                ? ["At least one team has fewer than 6 verified first-half results."] : []),
               ...(!hft.venueSplitUsed || !aft.venueSplitUsed
                 ? ["At least one venue split uses all-venue results because the venue sample is small."] : []),
               ...(!htReady
