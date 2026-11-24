@@ -292,6 +292,12 @@
   if(dailySearch) dailySearch.addEventListener("input",function(){renderDailyReport(allRecords);});
   const downloadDaily=document.getElementById("download-daily-report");
   if(downloadDaily) downloadDaily.addEventListener("click",downloadDailyReport);
+  const printDaily=document.getElementById("print-daily-report");
+  if(printDaily) printDaily.addEventListener("click",function(){
+    if(!dailyReportRows.length){if(dailyReportStatus)dailyReportStatus.textContent="There are no upcoming predictions in the current report to print.";return;}
+    document.body.classList.add("print-daily-report");
+    window.print();
+  });
   const dailyRefresh=document.getElementById("refresh-daily-report");
   if(dailyRefresh) dailyRefresh.addEventListener("click",loadPerformance);
   const performanceSearch = document.getElementById("performance-search");
