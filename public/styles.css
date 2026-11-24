@@ -239,3 +239,20 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .saved-prediction-empty{padding:18px;border:1px dashed #345044;border-radius:11px;color:var(--muted);font-size:11px;line-height:1.6}
 #saved-predictions-center{scroll-margin-top:82px}
 @media(max-width:680px){.saved-prediction-tools{grid-template-columns:1fr}.saved-predictions-section{padding:15px}.saved-predictions-heading{align-items:flex-start;flex-direction:column}.saved-predictions-heading .secondary-button{width:100%}.saved-prediction-periods{grid-template-columns:1fr}.saved-prediction-card-head{flex-direction:column}}
+
+/* Accuracy Centre */
+.accuracy-centre{margin:24px 0 28px;padding:18px;border:1px solid #29435a;border-radius:16px;background:#0d1a29}
+.accuracy-centre h3{font-size:19px;margin:0}.accuracy-description{font-size:11px;color:var(--muted);line-height:1.6;margin:7px 0 15px}
+.accuracy-overview{margin-top:12px}.accuracy-total{padding:12px;border:1px solid var(--line);border-radius:11px;background:#101f30}
+.accuracy-total span,.accuracy-stat span{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.6px}
+.accuracy-total strong{display:block;color:var(--green);font-size:23px;margin-top:5px}
+.accuracy-models,.accuracy-breakdowns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.accuracy-models>article,.accuracy-group{padding:12px;border:1px solid #263d53;border-radius:11px;background:#101f30;min-width:0}
+.accuracy-models h4,.accuracy-breakdowns h4{font-size:12px;margin:0 0 10px}
+.accuracy-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.accuracy-stat{padding:9px;border-radius:8px;background:#0a1724;min-width:0}.accuracy-stat strong{display:block;font-size:11px;margin-top:5px;overflow-wrap:anywhere}
+.accuracy-group{margin-bottom:8px}.accuracy-group-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px}
+.accuracy-group-head strong{font-size:11px}.accuracy-group-head span{font-size:9px;color:var(--muted)}
+.accuracy-group>b{display:block;font-size:9px;color:var(--cyan);margin:9px 0 5px}
+.accuracy-empty{font-size:11px;color:var(--muted);padding:12px;border:1px dashed var(--line);border-radius:9px}
+@media(max-width:700px){.accuracy-centre{padding:13px}.accuracy-models,.accuracy-breakdowns{grid-template-columns:1fr}}
