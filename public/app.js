@@ -411,11 +411,11 @@ function renderOddsMarkup(payload) {
         {key:"away",label:"Away",price:price(resultRows,"away")}
       ];
       const valid = outcomes.filter(function(item){return Number.isFinite(item.price)&&item.price>1;});
-      if (!valid.length) return '<div class="odds-market"><span>1 · X · 2</span><b>Odds available · probability unavailable</b></div>';
+      if (valid.length !== 3) return '<div class="odds-market"><span>1 · X · 2</span><b>Need all three 1X2 prices to calculate fair chances</b></div>';
       const total = valid.reduce(function(sum,item){return sum+1/item.price;},0);
       valid.forEach(function(item){item.chance=(1/item.price)/total*100;});
       const highest = valid.reduce(function(best,item){return !best||item.chance>best.chance?item:best;},null);
-      return '<div class="odds-win-chances"><strong>WIN PROBABILITY · BOOKMAKER IMPLIED</strong><div class="odds-chance-grid">' +
+      return '<div class="odds-win-chances"><strong>WIN PROBABILITY · MARGIN-ADJUSTED ODDS</strong><div class="odds-chance-grid">' +
         outcomes.map(function(item){
           const available=Number.isFinite(item.chance);
           const isHighest=available&&item.key===highest.key;
