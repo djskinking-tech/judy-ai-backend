@@ -117,6 +117,7 @@
   let allRecords = [];
   const dailyReportList = document.getElementById("daily-report-list");
   const dailyReportStatus = document.getElementById("daily-report-status");
+  let dailyReportRows = [];
   function reportDateKey(date, offset) {
     const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"Africa/Nairobi",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
     const values = {};
@@ -157,6 +158,7 @@
       const searchable=[item.fixture.name,item.fixture.homeTeam,item.fixture.awayTeam,item.fixture.league].filter(Boolean).join(" ").toLowerCase();
       return !query || searchable.includes(query);
     }).sort(function(a,b){return b.rank-a.rank || a.kickoff-b.kickoff;});
+    dailyReportRows = upcoming;
     if (dailyReportStatus) dailyReportStatus.textContent = upcoming.length+" upcoming match"+(upcoming.length===1?"":"es")+" with saved HT and FT predictions · ranked by mean top-score probability.";
     if (!upcoming.length) {
       dailyReportList.innerHTML='<div class="daily-report-empty">No upcoming saved predictions match this view yet. JUDY AI will list a match here after its pre-kick-off prediction has been saved.</div>';
@@ -169,6 +171,34 @@
       const quality=item.record.confidence||"Not recorded";
       return '<article class="daily-report-card"><div class="daily-report-card-head"><span class="daily-report-rank">#'+(index+1)+'</span><div class="daily-report-match"><strong>'+escapeHtml(name)+'</strong><small>'+escapeHtml(fixture.league||"League not recorded")+' · '+escapeHtml(kickoff)+'</small></div><b class="daily-report-prob">'+item.rank.toFixed(1)+'%<small>mean top score</small></b></div><div class="daily-report-scores"><div><span>HALF-TIME · TOP 2</span><strong>'+escapeHtml(reportScore(item.ht))+'</strong></div><div><span>FULL-TIME · TOP 2</span><strong>'+escapeHtml(reportScore(item.ft))+'</strong></div></div><div class="daily-report-meta"><span>Recorded confidence: '+escapeHtml(quality)+'</span><span>Pre-kick-off saved prediction</span></div></article>';
     }).join("");
+  }
+
+
+  function csvCell(value) {
+    let text = String(value == null ? "" : value);
+    if (text && "=+-@\t\r".includes(text.charAt(0))) text = "'" + text;
+    return '"' + text.replace(/"/g,'""') + '"';
+  }
+  function downloadDailyReport() {
+    if (!dailyReportRows.length) {
+      if (dailyReportStatus) dailyReportStatus.textContent = "There are no upcoming predictions in the current report to export.";
+      return;
+    }
+    const headers = ["Rank","Fixture","League","Kick-off (EAT)","HT option 1","HT probability 1 (%)","HT option 2","HT probability 2 (%)","FT option 1","FT probability 1 (%)","FT option 2","FT probability 2 (%)","Recorded confidence"];
+    const rows = dailyReportRows.map(function(item,index) {
+      const fixture=item.fixture, date=new Intl.DateTimeFormat("en-KE",{timeZone:"Africa/Nairobi",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(item.kickoff);
+      const ht=item.ht,ft=item.ft;
+      return [index+1,fixture.name||((fixture.homeTeam||"Home")+" vs "+(fixture.awayTeam||"Away")),fixture.league||"",date,
+        ht[0]&&ht[0].score,ht[0]&&ht[0].probability,ht[1]&&ht[1].score,ht[1]&&ht[1].probability,
+        ft[0]&&ft[0].score,ft[0]&&ft[0].probability,ft[1]&&ft[1].score,ft[1]&&ft[1].probability,item.record.confidence||""]
+        .map(csvCell).join(",");
+    });
+    const csv = "\uFEFF" + [headers.map(csvCell).join(",")].concat(rows).join("\r\n");
+    const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href=url; link.download="judy-ai-prediction-report-"+reportDateKey(new Date(),0)+".csv";
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    if (dailyReportStatus) dailyReportStatus.textContent = "Exported "+dailyReportRows.length+" upcoming predictions to CSV.";
   }
 
   function renderRecords(items) {
@@ -260,6 +290,8 @@
   const dailyDate=document.getElementById("daily-report-date"), dailySearch=document.getElementById("daily-report-search");
   if(dailyDate) dailyDate.addEventListener("change",function(){renderDailyReport(allRecords);});
   if(dailySearch) dailySearch.addEventListener("input",function(){renderDailyReport(allRecords);});
+  const downloadDaily=document.getElementById("download-daily-report");
+  if(downloadDaily) downloadDaily.addEventListener("click",downloadDailyReport);
   const dailyRefresh=document.getElementById("refresh-daily-report");
   if(dailyRefresh) dailyRefresh.addEventListener("click",loadPerformance);
   const performanceSearch = document.getElementById("performance-search");
