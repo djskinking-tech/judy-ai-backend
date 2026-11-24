@@ -401,9 +401,28 @@ function renderOddsMarkup(payload) {
     const bttsRows = bookmakerRows.filter(function (row) { return oddsMarketType(row) === "btts"; });
     function price(group, key) {
       const row = oddsOutcome(group, key);
-      return row ? Number(row.value).toFixed(2) : "—";
+      const value = row ? Number(row.value) : NaN;
+      return Number.isFinite(value) && value > 1 ? value : null;
     }
-    const result = resultRows.length ? '<div class="odds-market"><span>1 · X · 2</span><b>' + price(resultRows,"home") + ' · ' + price(resultRows,"draw") + ' · ' + price(resultRows,"away") + '</b></div>' : '';
+    function resultChanceMarkup() {
+      const outcomes = [
+        {key:"home",label:"Home",price:price(resultRows,"home")},
+        {key:"draw",label:"Draw",price:price(resultRows,"draw")},
+        {key:"away",label:"Away",price:price(resultRows,"away")}
+      ];
+      const valid = outcomes.filter(function(item){return Number.isFinite(item.price)&&item.price>1;});
+      if (!valid.length) return '<div class="odds-market"><span>1 · X · 2</span><b>Odds available · probability unavailable</b></div>';
+      const total = valid.reduce(function(sum,item){return sum+1/item.price;},0);
+      valid.forEach(function(item){item.chance=(1/item.price)/total*100;});
+      const highest = valid.reduce(function(best,item){return !best||item.chance>best.chance?item:best;},null);
+      return '<div class="odds-win-chances"><strong>WIN PROBABILITY · BOOKMAKER IMPLIED</strong><div class="odds-chance-grid">' +
+        outcomes.map(function(item){
+          const available=Number.isFinite(item.chance);
+          const isHighest=available&&item.key===highest.key;
+          return '<div class="odds-chance '+(isHighest?'odds-chance-highest':'')+'"><span>'+item.label+'</span><b>'+(available?item.chance.toFixed(1)+'%':'—')+'</b><small>'+(available?'Odds '+item.price.toFixed(2)+(isHighest?' · HIGHEST CHANCE':''):'No odds')+'</small></div>';
+        }).join('')+'</div></div>';
+    }
+    const result = resultRows.length ? resultChanceMarkup() : '';
     const goals = goalRows.length ? '<div class="odds-market"><span>Over / Under 2.5</span><b>' + price(goalRows,"over") + ' / ' + price(goalRows,"under") + '</b></div>' : '';
     const btts = bttsRows.length ? '<div class="odds-market"><span>BTTS Yes / No</span><b>' + price(bttsRows,"yes") + ' / ' + price(bttsRows,"no") + '</b></div>' : '';
     return '<div class="odds-bookmaker"><strong>' + escapeHtml(name) + '</strong>' +
