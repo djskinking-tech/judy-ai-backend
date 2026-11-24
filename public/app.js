@@ -313,10 +313,12 @@ function renderMatches(matches) {
     const league = leagueName(match);
     const status = matchStatus(match);
     const fixtureId = match.id || match.fixture_id || "";
-    const supportsPredictions = match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false;
+    const isOpenLiga = match.fixtureSource === "OpenLigaDB";
+    const supportsPredictions = isOpenLiga || (match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false);
+    const supportsOdds = !isOpenLiga && supportsPredictions && /^\\d+$/.test(String(fixtureId));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button><button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button></div>' +
-        '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' +
+      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + '</div>' +
+        (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
         '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
@@ -457,7 +459,7 @@ function teamIntelligenceMarkup(data) {
   }
   return '<section class="team-intelligence"><h4>TEAM INTELLIGENCE · RECENT FORM</h4>' +
     teamBlock("Home team", data.home) + teamBlock("Away team", data.away) +
-    '<small>Based on completed Sportmonks results. Injuries, suspensions and lineups are not verified here.</small></section>';
+    '<small>Based on completed match results. Injuries, suspensions and lineups are not verified here.</small></section>';
 }
 async function generatePrediction(button) {
   const fixtureId = button.dataset.fixtureId;
