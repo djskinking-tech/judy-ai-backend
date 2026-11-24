@@ -1088,6 +1088,43 @@ export default {
         };
       }
 
+      // V2.2 experimental estimator: use up to 15 prior matches and shrink
+      // small venue-only samples toward each team's all-venue baseline.
+      // The four-match prior prevents one or two home/away results dominating.
+      function periodAveragesV22(form, key, preferredVenue, kickoff) {
+        const allRows = form.filter(item => item[key]);
+        const venueRows = allRows.filter(item => item.venue === preferredVenue);
+        const weightedStats = rows => {
+          let scoredTotal = 0, concededTotal = 0, weightTotal = 0;
+          for (const item of rows) {
+            const matchDate = new Date(String(item.date || "").replace(" ", "T") + "Z");
+            const ageDays = Number.isNaN(matchDate.getTime()) ? 0 :
+              Math.max(0, (kickoff.getTime() - matchDate.getTime()) / 86400000);
+            const weight = Math.exp(-Math.LN2 * ageDays / 45);
+            scoredTotal += item[key].scored * weight;
+            concededTotal += item[key].conceded * weight;
+            weightTotal += weight;
+          }
+          return {
+            scored: weightTotal ? scoredTotal / weightTotal : null,
+            conceded: weightTotal ? concededTotal / weightTotal : null
+          };
+        };
+        const all = weightedStats(allRows);
+        const venue = weightedStats(venueRows);
+        const venueWeight = venueRows.length / (venueRows.length + 4);
+        const blend = (venueValue, allValue) => venueValue === null ? allValue :
+          allValue === null ? venueValue : venueValue * venueWeight + allValue * (1 - venueWeight);
+        return {
+          scored: blend(venue.scored, all.scored),
+          conceded: blend(venue.conceded, all.conceded),
+          matches: allRows.length,
+          venueMatches: venueRows.length,
+          venueShrinkageWeight: Number(venueWeight.toFixed(3)),
+          venueSplitUsed: venueRows.length > 0
+        };
+      }
+
       function scoreText(home, away) {
         return home && away ? home.scored + "-" + away.scored : null;
       }
@@ -1204,7 +1241,7 @@ export default {
               })
               .filter(f => f.ft)
               .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-              .slice(0, 10);
+              .slice(0, 15);
           }
 
           const homeForm = recentForm(homeHistory, homeTeam.id);
@@ -1235,10 +1272,28 @@ export default {
           const v2FtAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft.scored, hft.conceded, leagueFt.average, v1FtAway) : v1FtAway;
           const v2HtHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average, v1HtHome) : v1HtHome) : null;
           const v2HtAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average, v1HtAway) : v1HtAway) : null;
+
+          const hft22 = periodAveragesV22(homeForm, "ft", "home", kickoff);
+          const aft22 = periodAveragesV22(awayForm, "ft", "away", kickoff);
+          const hht22 = periodAveragesV22(homeForm, "ht", "home", kickoff);
+          const aht22 = periodAveragesV22(awayForm, "ht", "away", kickoff);
+          const v22BaseFtHome = expectedGoals(hft22.scored, aft22.conceded);
+          const v22BaseFtAway = expectedGoals(aft22.scored, hft22.conceded);
+          const htReady22 = hht22.scored !== null && hht22.conceded !== null &&
+            aht22.scored !== null && aht22.conceded !== null;
+          const v22BaseHtHome = htReady22 ? expectedGoals(hht22.scored, aht22.conceded) : null;
+          const v22BaseHtAway = htReady22 ? expectedGoals(aht22.scored, hht22.conceded) : null;
+          const v22FtHome = leagueFt.used ? leagueAdjustedExpectedGoals(hft22.scored, aft22.conceded, leagueFt.average, v22BaseFtHome) : v22BaseFtHome;
+          const v22FtAway = leagueFt.used ? leagueAdjustedExpectedGoals(aft22.scored, hft22.conceded, leagueFt.average, v22BaseFtAway) : v22BaseFtAway;
+          const v22HtHome = htReady22 ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht22.scored, aht22.conceded, leagueHt.average, v22BaseHtHome) : v22BaseHtHome) : null;
+          const v22HtAway = htReady22 ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht22.scored, hht22.conceded, leagueHt.average, v22BaseHtAway) : v22BaseHtAway) : null;
+
           const ftOptions = topScoreOptions(v1FtHome, v1FtAway);
           const htOptions = htReady ? topScoreOptions(v1HtHome, v1HtAway) : null;
           const v2FtOptions = topScoreOptions(v2FtHome, v2FtAway);
           const v2HtOptions = htReady ? topScoreOptions(v2HtHome, v2HtAway) : null;
+          const v22FtOptions = topScoreOptions(v22FtHome, v22FtAway);
+          const v22HtOptions = htReady22 ? topScoreOptions(v22HtHome, v22HtAway) : null;
 
           const actualHomeFT = goalsForAgainst(target, homeTeam.id, "CURRENT") ||
             goalsForAgainst(target, homeTeam.id, "2ND_HALF");
@@ -1284,6 +1339,24 @@ export default {
                 halfTimeLeagueFixtures: leagueHt.fixtures,
                 halfTimeAdjustmentUsed: leagueHt.used
               }
+            },
+            comparisonV2_2: {
+              predicted: { fullTime: v22FtOptions, halfTime: v22HtOptions },
+              hits: {
+                fullTimeExact: v22FtOptions[0] && v22FtOptions[0].score === actualFT,
+                fullTimeTopTwo: v22FtOptions.some(option => option.score === actualFT),
+                halfTimeExact: actualHT ? Boolean(v22HtOptions && v22HtOptions[0] && v22HtOptions[0].score === actualHT) : null,
+                halfTimeTopTwo: actualHT ? Boolean(v22HtOptions && v22HtOptions.some(option => option.score === actualHT)) : null
+              },
+              diagnostics: {
+                recentMatchesUsed: { home: homeForm.length, away: awayForm.length },
+                venueShrinkagePriorMatches: 4,
+                homeVenueMatches: hft22.venueMatches,
+                awayVenueMatches: aft22.venueMatches,
+                homeVenueWeight: hft22.venueShrinkageWeight,
+                awayVenueWeight: aft22.venueShrinkageWeight,
+                leagueAdjustmentUsed: leagueFt.used
+              }
             }
           });
         }
@@ -1297,11 +1370,14 @@ export default {
         const v2Hits = key => completed.filter(item => item.comparisonV2_1 && item.comparisonV2_1.hits[key] === true).length;
         const v2HtHits = htCompleted.filter(item => item.comparisonV2_1 && item.comparisonV2_1.hits.halfTimeExact === true).length;
         const v2HtTopTwoHits = htCompleted.filter(item => item.comparisonV2_1 && item.comparisonV2_1.hits.halfTimeTopTwo === true).length;
+        const v22Hits = key => completed.filter(item => item.comparisonV2_2 && item.comparisonV2_2.hits[key] === true).length;
+        const v22HtHits = htCompleted.filter(item => item.comparisonV2_2 && item.comparisonV2_2.hits.halfTimeExact === true).length;
+        const v22HtTopTwoHits = htCompleted.filter(item => item.comparisonV2_2 && item.comparisonV2_2.hits.halfTimeTopTwo === true).length;
         return reply({
           app: "JUDY AI",
           success: true,
           mode: "historical_backtest_v1_vs_v2",
-          engineComparison: "V1 baseline versus V2.1 conservative league-adjusted Poisson",
+          engineComparison: "V1 baseline vs V2.1 conservative league-adjusted Poisson vs experimental V2.2 venue-shrunk 15-match model",
           warning: "Experimental paired comparison only. Both models use only matches strictly before each fixture's kickoff. V2 league averages are estimated from recent available fixtures involving the two teams in the same league, not a complete league-wide sample.",
           requestedFixtures: rawIds.length,
           search: searchSummary,
@@ -1328,6 +1404,17 @@ export default {
             halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((v2HtHits / htCompleted.length * 100).toFixed(2)) : null,
             halfTimeTopTwoHits: v2HtTopTwoHits,
             halfTimeTopTwoAccuracyPercent: htCompleted.length ? Number((v2HtTopTwoHits / htCompleted.length * 100).toFixed(2)) : null
+          },
+          metricsV2_2: {
+            fullTimeExactScoreHits: v22Hits("fullTimeExact"),
+            fullTimeExactScoreAccuracyPercent: rate(v22Hits("fullTimeExact")),
+            fullTimeTopTwoHits: v22Hits("fullTimeTopTwo"),
+            fullTimeTopTwoAccuracyPercent: rate(v22Hits("fullTimeTopTwo")),
+            halfTimeFixturesWithResults: htCompleted.length,
+            halfTimeExactScoreHits: v22HtHits,
+            halfTimeExactScoreAccuracyPercent: htCompleted.length ? Number((v22HtHits / htCompleted.length * 100).toFixed(2)) : null,
+            halfTimeTopTwoHits: v22HtTopTwoHits,
+            halfTimeTopTwoAccuracyPercent: htCompleted.length ? Number((v22HtTopTwoHits / htCompleted.length * 100).toFixed(2)) : null
           },
           results: completed
         });
