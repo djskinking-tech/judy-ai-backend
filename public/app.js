@@ -337,7 +337,7 @@ function renderMatches(matches) {
   loadSavedPredictions(matches);
 }
 async function loadSavedPredictions(matches) {
-  const ids = matches.filter(function (match) { return match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false; }).map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id) || /^openligadb:\d+$/.test(id); });
+  const ids = matches.filter(function (match) { return match.fixtureSource === "OpenLigaDB" || (match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false); }).map(function (match) { return String(match.id || match.fixture_id || ""); }).filter(function (id) { return /^\d+$/.test(id) || /^openligadb:\d+$/.test(id); });
   if (!ids.length) return;
   try {
     const response = await fetch("/api/predictions/saved?fixtureIds=" + encodeURIComponent(ids.join(",")), { headers: {"Accept":"application/json"} });
