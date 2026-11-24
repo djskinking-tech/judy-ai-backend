@@ -447,6 +447,9 @@ export default {
             const record = JSON.parse(raw);
             if (record.status === "completed") continue;
             if (String(record.fixtureId || "").startsWith("openligadb:")) {
+              const fallbackKickoffRaw = String(record.fixture && record.fixture.startingAt || "").replace(" ", "T");
+              const fallbackKickoff = new Date(/[zZ]|[+-]\\d{2}:\\d{2}$/.test(fallbackKickoffRaw) ? fallbackKickoffRaw : fallbackKickoffRaw + "Z").getTime();
+              if (!Number.isFinite(fallbackKickoff) || fallbackKickoff > Date.now()) continue;
               const openId = String(record.fixtureId).split(":")[1];
               const openResponse = await fetch("https://api.openligadb.de/getmatchdata/" + openId, { headers: { "Accept": "application/json" } });
               if (!openResponse.ok) {
