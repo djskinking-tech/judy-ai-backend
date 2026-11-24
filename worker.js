@@ -2,10 +2,12 @@ const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
 const CACHE_TTL = 900;
 
 function verifiedOpenLigaCorrection(date, homeTeam) {
-  const corrections = {
-    "2026-11-25|Sabah": { awayTeam: "Barcelona" }
-  };
-  return corrections[String(date || "") + "|" + String(homeTeam || "")] || null;
+  const corrections = [
+    { date: "2026-11-25", homeTeam: "sabah", awayTeam: "Barcelona" }
+  ];
+  const normalise = value => String(value || "").toLowerCase().replace(/\\b(fc|cf|afc|sc|ac)\\b/g, "").replace(/[^a-z0-9]/g, "");
+  return corrections.find(row => row.date === String(date || "") &&
+    normalise(row.homeTeam) === normalise(homeTeam)) || null;
 }
 
 async function sportmonksRequest(env, path, params = {}, options = {}) {
@@ -1371,7 +1373,8 @@ export default {
           const kickoffText = target.matchDateTimeUTC || target.matchDateTime;
           const kickoff = kickoffText ? new Date(String(kickoffText).replace(" ", "T")) : null;
           if (!kickoff || Number.isNaN(kickoff.getTime())) return reply({ success: false, error: "Fixture kick-off time is unavailable; prediction withheld." }, 422);
-          const verifiedCorrection = verifiedOpenLigaCorrection(kickoff.toISOString().slice(0, 10), target.team1.teamName);
+          const nairobiDate = new Date(kickoff.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const verifiedCorrection = verifiedOpenLigaCorrection(nairobiDate, target.team1.teamName);
           if (verifiedCorrection && String(target.team2.teamName || "") !== verifiedCorrection.awayTeam) {
             return reply({
               app: "JUDY AI", success: false, status: "fixture_mapping_conflict",
