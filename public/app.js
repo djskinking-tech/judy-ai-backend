@@ -583,44 +583,36 @@ async function loadSavedPredictions(matches) {
   }
 }
 function venueAdvantageMarkup(data) {
-  const home = data && data.home;
-  const away = data && data.away;
-  if (!home || !away) {
-    return '<section class="venue-advantage"><h4>🏟️ HOME & AWAY ADVANTAGE</h4><p>Venue-specific team statistics are not available for this fixture yet.</p></section>';
+  const home = data && data.home, away = data && data.away;
+  if (!home || !away) return '<section class="venue-advantage"><h4>🏟️ HOME & AWAY ADVANTAGE</h4><p>Venue-specific team statistics are not available for this fixture yet.</p></section>';
+  function n(v) { return v == null || !Number.isFinite(Number(v)) ? null : Number(v); }
+  function row(label, p) {
+    if (!p || n(p.matches) === 0) return '<div class="venue-profile-row"><strong>' + label + '</strong><span>No verified matches in this venue sample.</span></div>';
+    const m=n(p.matches), w=n(p.wins), d=n(p.draws), l=n(p.losses);
+    const record=w==null||d==null||l==null?'W-D-L not supplied':w+'-'+d+'-'+l;
+    const pattern=m>=5&&l===0?' · UNBEATEN':m>=5&&w===0?' · NO WINS':m>=5&&l/m>=.6?' · HIGH LOSS RATE':m>=5&&w/m>=.6?' · HIGH WIN RATE':'';
+    const gf=n(p.averageGoalsFor), ga=n(p.averageGoalsAgainst);
+    const goals=gf==null||ga==null?'':' · Avg goals '+gf.toFixed(2)+' for / '+ga.toFixed(2)+' against';
+    return '<div class="venue-profile-row"><strong>'+label+'</strong><span>'+escapeHtml(record+' · '+m+' matches'+pattern+goals)+'</span></div>';
   }
-  function number(value) { return value == null || !Number.isFinite(Number(value)) ? null : Number(value); }
-  function teamCard(label, team, venue) {
-    const wins = number(team.wins), draws = number(team.draws), losses = number(team.losses);
-    const matches = number(team.venueMatches);
-    const scored = number(team.averageGoalsFor), conceded = number(team.averageGoalsAgainst);
-    const venueSpecific = String(team.venueSplit || "").toLowerCase() === venue;
-    const record = wins == null || draws == null || losses == null ? "W-D-L: Not supplied" : "W-D-L: " + wins + "-" + draws + "-" + losses;
-    const goals = scored == null || conceded == null ? "Goals: Not supplied" : "Avg goals: " + scored.toFixed(2) + " scored / " + conceded.toFixed(2) + " conceded";
-    const sample = matches == null ? "Sample size not supplied" : matches + " matches analysed";
-    return { html: '<div class="venue-advantage-team"><strong>' + label + '</strong><span>' + escapeHtml(record) + '</span><span>' + escapeHtml(goals) + '</span><small>' + escapeHtml(sample) + (venueSpecific ? ' · venue-specific' : ' · all-venue fallback') + '</small></div>',
-      venueSpecific, wins, draws, losses, matches, scored, conceded };
+  function club(label, team) {
+    const p=team.venueProfiles||{};
+    return '<article class="venue-club-card"><h5>'+label+'</h5>'+row('AT HOME',p.home)+row('AWAY',p.away)+'</article>';
   }
-  const h = teamCard("HOME CLUB · AT HOME", home, "home");
-  const a = teamCard("AWAY CLUB · AWAY", away, "away");
-  let verdict = "Not enough verified venue-specific data to compare the teams fairly.";
-  let verdictClass = "";
-  if (h.venueSpecific && a.venueSpecific && h.matches >= 2 && a.matches >= 2 &&
-      h.wins != null && h.draws != null && h.losses != null &&
-      a.wins != null && a.draws != null && a.losses != null &&
-      h.scored != null && h.conceded != null && a.scored != null && a.conceded != null) {
-    const homePpg = (3 * h.wins + h.draws) / h.matches;
-    const awayPpg = (3 * a.wins + a.draws) / a.matches;
-    const homeGoalDiff = h.scored - h.conceded;
-    const awayGoalDiff = a.scored - a.conceded;
-    const edge = (homePpg - awayPpg) + 0.35 * (homeGoalDiff - awayGoalDiff);
-    if (edge > 0.25) { verdict = "Home club has the stronger venue-form indicators."; verdictClass = "venue-edge-home"; }
-    else if (edge < -0.25) { verdict = "Away club has the stronger away-form indicators."; verdictClass = "venue-edge-away"; }
-    else { verdict = "Venue-form indicators are closely balanced."; verdictClass = "venue-edge-level"; }
+  const hp=home.venueProfiles&&home.venueProfiles.home, ap=away.venueProfiles&&away.venueProfiles.away;
+  let verdict='Not enough verified venue-specific matches to compare this fixture fairly.', cls='';
+  if(hp&&ap&&hp.matches>=2&&ap.matches>=2){
+    const hpp=(3*hp.wins+hp.draws)/hp.matches, appp=(3*ap.wins+ap.draws)/ap.matches;
+    const hgd=(hp.averageGoalsFor||0)-(hp.averageGoalsAgainst||0), agd=(ap.averageGoalsFor||0)-(ap.averageGoalsAgainst||0);
+    const edge=(hpp-appp)+.35*(hgd-agd);
+    if(edge>.25){verdict='The home club has stronger results in its home matches than the away club has in its away matches.';cls='venue-edge-home';}
+    else if(edge<-.25){verdict='The away club has stronger away-form indicators than the home club has at home.';cls='venue-edge-away';}
+    else{verdict='The two clubs’ relevant venue records are closely balanced.';cls='venue-edge-level';}
   }
-  return '<section class="venue-advantage"><h4>🏟️ HOME & AWAY ADVANTAGE</h4>' +
-    '<div class="venue-advantage-grid">' + h.html + a.html + '</div>' +
-    '<div class="venue-advantage-verdict ' + verdictClass + '"><strong>VENUE FORM COMPARISON</strong><span>' + escapeHtml(verdict) + '</span></div>' +
-    '<small>Compares the home club’s home results with the away club’s away results. A venue-specific sample is required for the comparison; all-venue figures are shown only as context. This is a form indicator, not a guarantee or a claim that playing at home always wins.</small></section>';
+  return '<section class="venue-advantage"><h4>🏟️ HOME & AWAY ADVANTAGE</h4><div class="venue-club-grid">'+
+    club('HOME TEAM · FULL VENUE RECORD',home)+club('AWAY TEAM · FULL VENUE RECORD',away)+'</div>'+
+    '<div class="venue-advantage-verdict '+cls+'"><strong>FIXTURE VENUE COMPARISON</strong><span>'+escapeHtml(verdict)+'</span></div>'+
+    '<small>Each club’s home and away records are shown separately. Pattern labels require at least five matches. Figures use completed matches only; small samples can mislead and past form does not guarantee the next result.</small></section>';
 }
 function renderMatchIntelligencePanel(panel, fixtureId) {
   const saved = savedMatchIntelligence[fixtureId] || {};
