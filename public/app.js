@@ -525,10 +525,10 @@ function renderMatches(matches) {
     const supportsOdds = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
+      ? '<div class="prediction-actions">' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
         (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
-        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
-      : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
+        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Loading automatic prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Loading automatic prediction…</b></div></div>'
+      : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fixture source yet. JUDY AI will not invent predictions or bookmaker odds.</b></div>';
     return '<article class="fixture-card">' +
       '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span>' +
       (match.fixtureSource ? '<span>' + escapeHtml(match.fixtureSource) + '</span>' : '') + '</div>' +
@@ -879,6 +879,5 @@ fixturesBox.addEventListener("click", function (event) {
     loadFixtureOdds(oddsButton);
     return;
   }
-  const button = event.target.closest(".prediction-button");
-  if (button) generatePrediction(button);
+  // Match predictions are prepared automatically; no manual Generate action is required.
 });
