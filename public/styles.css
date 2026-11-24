@@ -387,3 +387,21 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 
 .player-appearance-status{display:block;padding:4px 6px;border-left:2px solid #3d8b70;border-radius:3px;background:#10251f;color:#c1d8ce!important}
 .player-appearance-status b{color:#f0f7f3;font-weight:700}
+
+
+/* Home and away venue-form comparison under Head-to-Head */
+.venue-advantage{margin:0;padding:13px;border:1px solid #315448;border-radius:12px;background:linear-gradient(145deg,#10241f,#0b1724)}
+.venue-advantage h4{margin:0 0 10px;color:var(--green);font-size:10px;letter-spacing:.08em}
+.venue-advantage-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.venue-advantage-team{display:grid;gap:6px;min-width:0;padding:10px;border:1px solid #29445b;border-radius:9px;background:#0d1b2a}
+.venue-advantage-team strong{font-size:10px;color:#e7eef7}
+.venue-advantage-team span{font-size:10px;line-height:1.4;color:var(--text)}
+.venue-advantage-team small,.venue-advantage>small{font-size:9px;line-height:1.5;color:var(--muted)}
+.venue-advantage-verdict{display:grid;gap:5px;margin-top:10px;padding:10px;border:1px solid #29445b;border-radius:9px;background:#101f2b}
+.venue-advantage-verdict strong{font-size:9px;letter-spacing:.07em;color:var(--muted)}
+.venue-advantage-verdict span{font-size:11px;line-height:1.45;color:var(--text)}
+.venue-edge-home span{color:var(--green)}
+.venue-edge-away span{color:#8fc6ff}
+.venue-edge-level span{color:#f0d58b}
+.venue-advantage>small{display:block;margin-top:9px}
+@media(max-width:520px){.venue-advantage-grid{grid-template-columns:1fr}}
