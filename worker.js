@@ -1,6 +1,13 @@
 const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
 const CACHE_TTL = 900;
 
+function verifiedOpenLigaCorrection(date, homeTeam) {
+  const corrections = {
+    "2026-11-25|Sabah": { awayTeam: "Barcelona" }
+  };
+  return corrections[String(date || "") + "|" + String(homeTeam || "")] || null;
+}
+
 async function sportmonksRequest(env, path, params = {}, options = {}) {
   const apiUrl = new URL("https://api.sportmonks.com/v3/football/" + path);
   for (const [key, value] of Object.entries(params)) apiUrl.searchParams.set(key, value);
@@ -1364,6 +1371,15 @@ export default {
           const kickoffText = target.matchDateTimeUTC || target.matchDateTime;
           const kickoff = kickoffText ? new Date(String(kickoffText).replace(" ", "T")) : null;
           if (!kickoff || Number.isNaN(kickoff.getTime())) return reply({ success: false, error: "Fixture kick-off time is unavailable; prediction withheld." }, 422);
+          const verifiedCorrection = verifiedOpenLigaCorrection(kickoff.toISOString().slice(0, 10), target.team1.teamName);
+          if (verifiedCorrection && String(target.team2.teamName || "") !== verifiedCorrection.awayTeam) {
+            return reply({
+              app: "JUDY AI", success: false, status: "fixture_mapping_conflict",
+              error: "Prediction withheld: the fixture provider's opponent conflicts with the independently verified fixture. JUDY will not analyse the wrong team.",
+              fixtureId, providerHome: target.team1.teamName, providerAway: target.team2.teamName,
+              verifiedAway: verifiedCorrection.awayTeam, source: "OpenLigaDB"
+            }, 409);
+          }
           if (target.matchIsFinished || kickoff.getTime() <= Date.now()) {
             return reply({ success: false, error: "This match has started or finished. JUDY only creates new predictions before kick-off.", fixtureId }, 409);
           }
@@ -2085,7 +2101,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v11/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v12/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2275,19 +2291,16 @@ export default {
               const rawAwayTeam = row.team2.teamName || "Away team";
               // Correct a confirmed community-feed error against the official
               // UEFA fixture list. Keep this narrow and auditable by date/team.
-              const verifiedCorrections = {
-                "2026-11-25|Sabah": { awayTeam: "Barcelona" }
-              };
-              const correction = verifiedCorrections[date + "|" + homeTeam] || null;
+              const correction = verifiedOpenLigaCorrection(date, homeTeam);
               openLigaRows.push({
                 id: "openligadb:" + String(row.matchID),
                 fixtureSource: "OpenLigaDB",
-                predictionsSupported: true,
+                predictionsSupported: !correction,
                 date,
                 kickoffLabel,
                 homeTeam,
                 awayTeam: correction ? correction.awayTeam : rawAwayTeam,
-                dataNote: correction ? "Opponent corrected against official UEFA fixture list" : null,
+                dataNote: correction ? "Opponent corrected against official UEFA fixture list; prediction disabled because the provider's fixture ID maps to different teams." : null,
                 league: { name: row.leagueName || league.name },
                 country: league.country,
                 status: row.matchIsFinished ? "Finished" : "Scheduled"
@@ -2462,8 +2475,8 @@ export default {
       const result = {
         app: "JUDY AI",
         success: true,
-        backendVersion: "openfootball-fallback-v3",
-        buildMarker: "competition-diagnostics-2026-11-24",
+        backendVersion: "openfootball-fallback-v4",
+        buildMarker: "fixture-mapping-safety-2026-11-24",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
