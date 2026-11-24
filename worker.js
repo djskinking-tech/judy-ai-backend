@@ -1471,7 +1471,7 @@ export default {
             }))
           });
           const firstHalfHomeCount = homeForm.filter(row => row.ht).length;
-        const firstHalfAwayCount = homeForm.filter(row => row.ht).length;
+        const firstHalfAwayCount = awayForm.filter(row => row.ht).length;
         const confidence = Math.min(homeForm.length, awayForm.length) >= 10 &&
           hft.venueMatches >= 3 && aft.venueMatches >= 3 &&
           firstHalfHomeCount >= 6 && firstHalfAwayCount >= 6 ? "Moderate" : "Low";
