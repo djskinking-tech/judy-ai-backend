@@ -1244,12 +1244,19 @@ export default {
               .slice(0, 15);
           }
 
-          const homeForm = recentForm(homeHistory, homeTeam.id);
-          const awayForm = recentForm(awayHistory, awayTeam.id);
+          // Keep V1 and V2.1 on their original 10-match sample for a fair
+          // paired comparison. V2.2 alone receives up to 15 prior matches.
+          const homeHistory15 = recentForm(homeHistory, homeTeam.id);
+          const awayHistory15 = recentForm(awayHistory, awayTeam.id);
+          const homeForm = homeHistory15.slice(0, 10);
+          const awayForm = awayHistory15.slice(0, 10);
+          const homeForm22 = homeHistory15;
+          const awayForm22 = awayHistory15;
           if (homeForm.length < 3 || awayForm.length < 3) {
             tested.push({
               fixtureId, match: target.name, status: "insufficient_history",
-              sampleSize: { home: homeForm.length, away: awayForm.length }
+              sampleSize: { home: homeForm.length, away: awayForm.length },
+              v22SampleSize: { home: homeForm22.length, away: awayForm22.length }
             });
             continue;
           }
@@ -1273,10 +1280,10 @@ export default {
           const v2HtHome = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(hht.scored, aht.conceded, leagueHt.average, v1HtHome) : v1HtHome) : null;
           const v2HtAway = htReady ? (leagueHt.used ? leagueAdjustedExpectedGoals(aht.scored, hht.conceded, leagueHt.average, v1HtAway) : v1HtAway) : null;
 
-          const hft22 = periodAveragesV22(homeForm, "ft", "home", kickoff);
-          const aft22 = periodAveragesV22(awayForm, "ft", "away", kickoff);
-          const hht22 = periodAveragesV22(homeForm, "ht", "home", kickoff);
-          const aht22 = periodAveragesV22(awayForm, "ht", "away", kickoff);
+          const hft22 = periodAveragesV22(homeForm22, "ft", "home", kickoff);
+          const aft22 = periodAveragesV22(awayForm22, "ft", "away", kickoff);
+          const hht22 = periodAveragesV22(homeForm22, "ht", "home", kickoff);
+          const aht22 = periodAveragesV22(awayForm22, "ht", "away", kickoff);
           const v22BaseFtHome = expectedGoals(hft22.scored, aft22.conceded);
           const v22BaseFtAway = expectedGoals(aft22.scored, hft22.conceded);
           const htReady22 = hht22.scored !== null && hht22.conceded !== null &&
@@ -1349,7 +1356,8 @@ export default {
                 halfTimeTopTwo: actualHT ? Boolean(v22HtOptions && v22HtOptions.some(option => option.score === actualHT)) : null
               },
               diagnostics: {
-                recentMatchesUsed: { home: homeForm.length, away: awayForm.length },
+                baselineRecentMatchesUsed: { home: homeForm.length, away: awayForm.length },
+                recentMatchesUsed: { home: homeForm22.length, away: awayForm22.length },
                 venueShrinkagePriorMatches: 4,
                 homeVenueMatches: hft22.venueMatches,
                 awayVenueMatches: aft22.venueMatches,
