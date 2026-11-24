@@ -291,3 +291,6 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .daily-report-empty{padding:16px;border:1px dashed #345044;border-radius:10px;color:var(--muted);font-size:11px;line-height:1.6}
 .daily-report-disclaimer{margin:12px 0 0;color:#8295a9;font-size:9px;line-height:1.6}#daily-prediction-report{scroll-margin-top:82px}
 @media(max-width:680px){.daily-report{padding:13px}.daily-report-heading{align-items:flex-start;flex-direction:column}.daily-report-heading .secondary-button{width:100%}.daily-report-tools,.daily-report-scores{grid-template-columns:1fr}.daily-report-meta{flex-direction:column}.daily-report-prob{font-size:15px}}
+
+.daily-report-actions{display:flex;gap:8px;flex-wrap:wrap}.daily-report-actions button{min-width:112px}
+@media(max-width:680px){.daily-report-actions{display:grid;grid-template-columns:1fr;width:100%}.daily-report-actions button{width:100%}}
