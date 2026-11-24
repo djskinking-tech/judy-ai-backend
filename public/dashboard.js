@@ -298,6 +298,7 @@
     document.body.classList.add("print-daily-report");
     window.print();
   });
+  window.addEventListener("afterprint",function(){document.body.classList.remove("print-daily-report");});
   const dailyRefresh=document.getElementById("refresh-daily-report");
   if(dailyRefresh) dailyRefresh.addEventListener("click",loadPerformance);
   const performanceSearch = document.getElementById("performance-search");
