@@ -88,23 +88,50 @@ function liveMinute(match) {
     (eventMinutes.length ? Math.max.apply(null, eventMinutes) : null);
   return minute ? String(minute) + "'" : "";
 }
-function renderLiveScores(matches) {
+function livePredictionForMatch(match, records) {
+  const fixtureId = String(match.id || match.fixture_id || "");
+  const home = liveTeamName(match, "home").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const away = liveTeamName(match, "away").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return records.find(function (record) {
+    const savedId = String(record.fixtureId || record.fixture && record.fixture.id || "");
+    if (fixtureId && savedId && fixtureId === savedId) return true;
+    const savedHome = String(record.fixture && (record.fixture.homeTeam || record.fixture.home || record.fixture.localteam) || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const savedAway = String(record.fixture && (record.fixture.awayTeam || record.fixture.away || record.fixture.visitorteam) || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return home && away && savedHome === home && savedAway === away;
+  }) || null;
+}
+function livePredictionMarkup(record) {
+  if (!record || !record.predictions) return "";
+  function scores(period) {
+    const options = record.predictions[period] && record.predictions[period].options;
+    return Array.isArray(options) && options.length
+      ? options.slice(0, 2).map(function (item) { return escapeHtml(item.score); }).join(" · ")
+      : "Not available";
+  }
+  return '<div class="live-saved-prediction"><strong>JUDY AI ORIGINAL PREDICTION</strong>' +
+    '<span>HT: ' + scores("halfTime") + '</span><span>FT: ' + scores("fullTime") + '</span>' +
+    '<small>Locked before kick-off · ' + (record.status === "completed" ? "Final result recorded" : "Original prediction preserved") + '</small></div>';
+}
+function renderLiveScores(matches, predictionRecords) {
   if (!matches.length) {
     liveScoreList.innerHTML = '<div class="live-empty">No live matches right now. JUDY AI will keep checking automatically.</div>';
     return;
   }
+  const records = Array.isArray(predictionRecords) ? predictionRecords : [];
   liveScoreList.innerHTML = matches.map(function (match) {
     const state = match.state || {};
     const status = state.short_name || state.state || state.name || "LIVE";
     const score = liveScoreFor(match);
     const minute = liveMinute(match);
     const isFinished = ["FT","AET","FT_PEN"].includes(String(status).toUpperCase());
+    const saved = livePredictionForMatch(match, records);
     return '<article class="live-score-card">' +
       '<div class="live-score-status"><span class="' + (isFinished ? "live-dot finished" : "live-dot") + '"></span>' +
       escapeHtml(String(status).toUpperCase()) + (minute && !isFinished ? ' · ' + escapeHtml(minute) : '') + '</div>' +
       '<div class="live-score-teams"><span>' + escapeHtml(liveTeamName(match,"home")) + '</span><strong>' + escapeHtml(score) + '</strong><span>' +
       escapeHtml(liveTeamName(match,"away")) + '</span></div>' +
       '<div class="live-score-league">' + escapeHtml(match.league && match.league.name || "Football") + '</div>' +
+      livePredictionMarkup(saved) +
       '</article>';
   }).join("");
 }
@@ -114,7 +141,17 @@ async function loadLiveScores() {
     const response = await fetch("/api/live-scores", { headers: {"Accept":"application/json"} });
     const payload = await response.json();
     if (!response.ok || !payload.success) throw new Error(payload.error || "Live scores unavailable.");
-    renderLiveScores(Array.isArray(payload.matches) ? payload.matches : []);
+    let predictionRecords = [];
+    try {
+      const trackingResponse = await fetch("/api/tracking", { headers: {"Accept":"application/json"} });
+      const trackingPayload = await trackingResponse.json();
+      if (trackingResponse.ok && trackingPayload.success && Array.isArray(trackingPayload.records)) {
+        predictionRecords = trackingPayload.records;
+      }
+    } catch (trackingError) {
+      console.warn("Saved predictions could not be attached to live scores:", trackingError);
+    }
+    renderLiveScores(Array.isArray(payload.matches) ? payload.matches : [], predictionRecords);
     liveScoreUpdated.textContent = "Updated " + new Intl.DateTimeFormat("en-KE", {
       timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", second: "2-digit"
     }).format(new Date(payload.updatedAt || Date.now())) + " EAT · refreshes every 30 seconds";
