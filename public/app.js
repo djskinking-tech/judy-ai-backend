@@ -277,6 +277,18 @@ async function loadFixtureOdds(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("odds-" + fixtureId);
   if (!panel || !(/^openligadb:\d+$/.test(fixtureId || "") || /^\d+$/.test(fixtureId || ""))) return;
+  if (/^openligadb:\\d+$/.test(fixtureId || "")) {
+    if (panel.dataset.loaded === "true") {
+      panel.hidden = !panel.hidden;
+      button.textContent = panel.hidden ? "Show odds" : "Hide odds";
+      return;
+    }
+    panel.hidden = false;
+    panel.innerHTML = '<p class="odds-empty">Real bookmaker odds are not supplied for this OpenLigaDB fixture. JUDY will not display invented prices. Odds will appear when a verified bookmaker feed is available for this match.</p>';
+    panel.dataset.loaded = "true";
+    button.textContent = "Hide odds";
+    return;
+  }
   if (panel.dataset.loaded === "true") {
     panel.hidden = !panel.hidden;
     button.textContent = panel.hidden ? "Show odds" : "Hide odds";
@@ -304,7 +316,7 @@ async function loadFixtureOdds(button) {
 async function loadHeadToHead(button) {
   const fixtureId = button.dataset.fixtureId;
   const panel = document.getElementById("h2h-" + fixtureId);
-  if (!panel || !/^\\d+$/.test(fixtureId || "")) return;
+  if (!panel || !(/^openligadb:\\d+$/.test(fixtureId || "") || /^\\d+$/.test(fixtureId || ""))) return;
   if (panel.dataset.loaded === "true") {
     panel.hidden = !panel.hidden;
     button.textContent = panel.hidden ? "Head to head" : "Hide H2H";
@@ -352,7 +364,7 @@ function renderMatches(matches) {
     const fixtureId = match.id || match.fixture_id || "";
     const isOpenLiga = match.fixtureSource === "OpenLigaDB";
     const supportsPredictions = isOpenLiga || (match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false);
-    const supportsOdds = !isOpenLiga && supportsPredictions && /^\d+$/.test(String(fixtureId));
+    const supportsOdds = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const actions = supportsPredictions
       ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
