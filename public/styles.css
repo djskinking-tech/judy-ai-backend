@@ -217,6 +217,7 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .saved-predictions-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .saved-predictions-heading h2{font-size:24px}
 .saved-predictions-heading p:last-child{max-width:650px;color:var(--muted);font-size:11px;line-height:1.6;margin:8px 0 0}
+.saved-prediction-tools{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,.42fr);gap:10px;margin-top:16px}.saved-prediction-search-label,.saved-prediction-filter-label{display:grid;gap:6px;color:#9fb2c7;font-size:8px;font-weight:850;letter-spacing:.8px}.saved-prediction-tools input,.saved-prediction-tools select{width:100%;min-width:0;padding:11px 12px;border:1px solid #345044;border-radius:9px;background:#0b1918;color:#eaf1f8;font:inherit;font-size:11px;outline:none}.saved-prediction-tools input:focus,.saved-prediction-tools select:focus{border-color:var(--green);box-shadow:0 0 0 2px rgba(92,190,140,.14)}
 .saved-predictions-status{color:#9fb2c7;font-size:10px;margin:14px 0}
 .saved-prediction-list{display:grid;gap:11px}
 .saved-prediction-card{padding:15px;border:1px solid #2a473e;border-radius:13px;background:#0b1918}
@@ -236,4 +237,4 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .saved-prediction-lock{margin-top:10px;color:#8fa2b8;font-size:9px;line-height:1.5}
 .saved-prediction-empty{padding:18px;border:1px dashed #345044;border-radius:11px;color:var(--muted);font-size:11px;line-height:1.6}
 #saved-predictions-center{scroll-margin-top:82px}
-@media(max-width:680px){.saved-predictions-section{padding:15px}.saved-predictions-heading{align-items:flex-start;flex-direction:column}.saved-predictions-heading .secondary-button{width:100%}.saved-prediction-periods{grid-template-columns:1fr}.saved-prediction-card-head{flex-direction:column}}
+@media(max-width:680px){.saved-prediction-tools{grid-template-columns:1fr}.saved-predictions-section{padding:15px}.saved-predictions-heading{align-items:flex-start;flex-direction:column}.saved-predictions-heading .secondary-button{width:100%}.saved-prediction-periods{grid-template-columns:1fr}.saved-prediction-card-head{flex-direction:column}}
