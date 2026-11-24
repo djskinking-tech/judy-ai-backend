@@ -1444,7 +1444,7 @@ export default {
     if (url.pathname === "/api/thesportsdb-diagnostics") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       const date = url.searchParams.get("date");
-      if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return reply({ app: "JUDY AI", success: false, error: "Date must use YYYY-MM-DD format" }, 400);
       }
       try {
