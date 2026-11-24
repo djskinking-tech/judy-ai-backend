@@ -1765,7 +1765,8 @@ export default {
       // fallback set; never convert these IDs into Sportmonks prediction IDs.
       const openFootballDiagnostics = [];
       if (fixtureSource !== "Sportmonks" || !matches.length) {
-        const seasonFolder = season + "-" + String(season + 1).slice(-2);
+        const openFootballSeason = Number(date.slice(0, 4)) - (Number(date.slice(5, 7)) < 7 ? 1 : 0);
+        const seasonFolder = openFootballSeason + "-" + String(openFootballSeason + 1).slice(-2);
         const competitions = [
           { code: "en.1", name: "Premier League", country: "England" },
           { code: "de.1", name: "Bundesliga", country: "Germany" },
