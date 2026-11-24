@@ -424,6 +424,94 @@ export default {
         });
         if (run.rateLimited) break;
       }
+      // Prepare supported OpenLigaDB fallback fixtures automatically as well.
+      // OpenFootball/TheSportsDB fixtures are deliberately excluded because the
+      // prediction endpoint does not yet have verified fixture-to-history mapping.
+      run.openLigaAutoPredictionGenerated = 0;
+      run.openLigaAutoPredictionInsufficientHistory = 0;
+      run.openLigaAutoPredictionFailed = 0;
+      run.openLigaAutoPredictionByDate = [];
+      for (const dayOffset of [0, 1]) {
+        const targetDate = nairobiDateOffset(dayOffset);
+        const batchKey = "autopregen-openliga:" + targetDate;
+        let batch = await env.JUDY_PREDICTIONS.get(batchKey);
+        batch = batch ? JSON.parse(batch) : { date: targetDate, completedIds: [], createdAt: new Date().toISOString() };
+        if (!Array.isArray(batch.completedIds)) batch.completedIds = [];
+        let fixtures = [];
+        try {
+          const matchesResponse = await this.fetch(new Request(
+            WEBSITE_ORIGIN + "/api/matches?date=" + encodeURIComponent(targetDate),
+            { method: "GET" }
+          ), env, ctx);
+          const matchesResult = await matchesResponse.json();
+          if (matchesResponse.ok && matchesResult && Array.isArray(matchesResult.matches)) {
+            fixtures = matchesResult.matches.filter(item =>
+              item && item.fixtureSource === "OpenLigaDB" &&
+              /^openligadb:\\d+$/.test(String(item.id || "")) &&
+              !["Finished", "Cancelled", "Postponed", "Abandoned"].includes(String(item.status || ""))
+            );
+          } else {
+            run.errors.push("OpenLigaDB auto-preparation for " + targetDate + ": fixture list unavailable.");
+          }
+        } catch (error) {
+          run.errors.push("OpenLigaDB auto-preparation for " + targetDate + ": " +
+            String(error && error.message || error).slice(0, 180));
+        }
+        const pending = fixtures.filter(item => !batch.completedIds.includes(String(item.id)));
+        const selected = pending.slice(0, 2);
+        let generated = 0;
+        let insufficient = 0;
+        let failed = 0;
+        for (const fixture of selected) {
+          try {
+            const response = await this.fetch(new Request(
+              WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(String(fixture.id)),
+              { method: "GET" }
+            ), env, ctx);
+            const result = await response.json();
+            if (response.status === 429 || (result && result.providerStatus === 429)) {
+              run.rateLimited = true;
+              run.errors.push("OpenLigaDB auto-preparation paused by rate limiting; it will retry next scheduled run.");
+              break;
+            }
+            if (response.ok && result && result.success === true && result.predictions) {
+              batch.completedIds.push(String(fixture.id));
+              if (!(result.tracking && result.tracking.saveStatus === "already_saved")) generated++;
+            } else if (result && result.status === "insufficient_history") {
+              insufficient++;
+              // Keep this fixture pending so improved history can be retried later.
+            } else {
+              failed++;
+              run.errors.push("OpenLigaDB prediction " + fixture.id + ": " +
+                String(result && (result.error || result.message) || "Prediction unavailable").slice(0, 160));
+            }
+          } catch (error) {
+            if (error && error.status === 429) run.rateLimited = true;
+            else {
+              failed++;
+              run.errors.push("OpenLigaDB prediction " + fixture.id + ": " +
+                String(error && error.message || error).slice(0, 160));
+            }
+            if (run.rateLimited) break;
+          }
+        }
+        batch.updatedAt = new Date().toISOString();
+        batch.completedIds = [...new Set(batch.completedIds)];
+        await env.JUDY_PREDICTIONS.put(batchKey, JSON.stringify(batch));
+        run.openLigaAutoPredictionGenerated += generated;
+        run.openLigaAutoPredictionInsufficientHistory += insufficient;
+        run.openLigaAutoPredictionFailed += failed;
+        run.openLigaAutoPredictionByDate.push({
+          date: targetDate,
+          fixturesFound: fixtures.length,
+          generatedThisRun: generated,
+          insufficientHistoryThisRun: insufficient,
+          failedThisRun: failed,
+          completedCount: batch.completedIds.length,
+          pendingCount: Math.max(0, fixtures.length - batch.completedIds.length)
+        });
+        if (run.rateLimited) break;
+      }
       run.autoPredictionByDate = autoDateResults;
       run.autoPredictionDate = autoDateResults.length ? autoDateResults[autoDateResults.length - 1].date : null;
       run.autoPredictionFixturesFound = autoDateResults.reduce((sum, item) => sum + item.fixturesFound, 0);
