@@ -447,7 +447,7 @@ export default {
           if (matchesResponse.ok && matchesResult && Array.isArray(matchesResult.matches)) {
             fixtures = matchesResult.matches.filter(item =>
               item && item.fixtureSource === "OpenLigaDB" &&
-              /^openligadb:\\d+$/.test(String(item.id || "")) &&
+              /^openligadb:\d+$/.test(String(item.id || "")) &&
               !["Finished", "Cancelled", "Postponed", "Abandoned"].includes(String(item.status || ""))
             );
           } else {
