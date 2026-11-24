@@ -351,9 +351,10 @@ function renderMatches(matches) {
     const isOpenLiga = match.fixtureSource === "OpenLigaDB";
     const supportsPredictions = isOpenLiga || (match.fixtureSource !== "TheSportsDB" && match.predictionsSupported !== false);
     const supportsOdds = !isOpenLiga && supportsPredictions && /^\d+$/.test(String(fixtureId));
+    const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsOdds ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Head to head</button>' : '') + '</div>' +
-        (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div><div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
+      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Head to head</button>' : '') + '</div>' +
+        (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
         '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
