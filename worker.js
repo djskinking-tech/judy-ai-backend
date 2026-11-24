@@ -1441,6 +1441,65 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/thesportsdb-diagnostics") {
+      if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
+      const date = url.searchParams.get("date");
+      if (!date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+        return reply({ app: "JUDY AI", success: false, error: "Date must use YYYY-MM-DD format" }, 400);
+      }
+      try {
+        const apiUrl = new URL("https://www.thesportsdb.com/api/v1/json/123/eventsday.php");
+        apiUrl.searchParams.set("d", date);
+        apiUrl.searchParams.set("s", "Soccer");
+        const upstream = await fetch(apiUrl.toString(), {
+          headers: { "Accept": "application/json" }
+        });
+        const raw = await upstream.text();
+        let body;
+        try { body = JSON.parse(raw); }
+        catch {
+          return reply({
+            app: "JUDY AI", success: false, provider: "TheSportsDB",
+            providerStatus: upstream.status,
+            message: "TheSportsDB returned unreadable data."
+          }, 502);
+        }
+        const rows = Array.isArray(body && body.events) ? body.events : [];
+        const sample = rows.slice(0, 5).map(event => ({
+          id: event.idEvent || null,
+          date: event.dateEvent || null,
+          time: event.strTime || null,
+          home: event.strHomeTeam || null,
+          away: event.strAwayTeam || null,
+          league: event.strLeague || null,
+          sport: event.strSport || null,
+          status: event.strStatus || null
+        }));
+        return reply({
+          app: "JUDY AI",
+          success: upstream.ok,
+          provider: "TheSportsDB",
+          configured: true,
+          authentication: "Public free key; no user secret required",
+          providerStatus: upstream.status,
+          date,
+          timezone: "Provider event date; kickoff timezone will be normalized after validation",
+          total: rows.length,
+          responseKeys: Object.keys(body || {}),
+          sample,
+          message: upstream.ok
+            ? (rows.length ? "TheSportsDB returned soccer events for this date." : "TheSportsDB returned no soccer events for this date.")
+            : "TheSportsDB rejected the request."
+        }, upstream.ok ? 200 : 502);
+      } catch (error) {
+        return reply({
+          app: "JUDY AI", success: false, provider: "TheSportsDB",
+          message: "TheSportsDB diagnostic request failed.",
+          details: error && error.message ? error.message : String(error)
+        }, 502);
+      }
+    }
+
     if (url.pathname === "/api/provider-diagnostics") {
       if (request.method !== "GET") return reply({ error: "GET method required" }, 405);
       if (!env.SPORTMONKS_API_TOKEN) return reply({ success: false, error: "Sportmonks API token is not configured" }, 500);
