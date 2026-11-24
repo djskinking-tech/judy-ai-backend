@@ -1475,13 +1475,37 @@ export default {
         const activeAbsences = sidelinedRows.filter(row => row && row.completed === false && (!row.end_date || String(row.end_date).slice(0, 10) >= todayNairobi));
         const lineupRows = Array.isArray(target.lineups) ? target.lineups : [];
         const playerLabel = row => (row.player && (row.player.display_name || row.player.common_name || row.player.name)) || row.player_name || "Name unavailable";
+        const absenceCategory = row => {
+          const reason = String(row.type && (row.type.name || row.type.code) || "").toLowerCase();
+          if (/injur|muscle|ligament|fracture|surgery|hamstring|knee|ankle/.test(reason)) return "Injury";
+          if (/suspend|red card|yellow card|disciplin/.test(reason)) return "Suspension";
+          if (/ill|sick|virus/.test(reason)) return "Illness";
+          if (/international|national team|duty/.test(reason)) return "International duty";
+          if (/doubt|questionable|late test/.test(reason)) return "Doubtful";
+          if (/personal|family/.test(reason)) return "Personal reasons";
+          return "Other / reason unclassified";
+        };
+        const teamNameFor = teamId => Number(teamId) === Number(homeTeam.id) ? homeTeam.name :
+          Number(teamId) === Number(awayTeam.id) ? awayTeam.name : "Team not identified";
         const confirmed = !!(target.metadata && target.metadata.lineup_confirmed === true);
         const playerWatch = {
           status: activeAbsences.length || lineupRows.length ? "available" : "limited",
-          absences: activeAbsences.map(row => ({ player: playerLabel(row), teamId: row.team_id || null, reason: row.type && (row.type.name || row.type.code) || "Reason not supplied", startDate: row.start_date || null, endDate: row.end_date || null, sourceStatus: "Sportmonks sidelined record" })),
+          absences: activeAbsences.map(row => ({
+            player: playerLabel(row), teamId: row.team_id || null, team: teamNameFor(row.team_id),
+            category: absenceCategory(row),
+            reason: row.type && (row.type.name || row.type.code) || "Reason not supplied",
+            startDate: row.start_date || null, endDate: row.end_date || null,
+            status: "Provider-listed unavailable", sourceStatus: "Sportmonks sidelined record"
+          })),
+          categories: ["Injury", "Suspension", "Illness", "International duty", "Doubtful", "Personal reasons", "Other / reason unclassified"],
           lineups: { status: lineupRows.length ? (confirmed ? "confirmed" : "predicted_or_unconfirmed") : "not_available", label: lineupRows.length ? (confirmed ? "Confirmed lineups" : "Expected / unconfirmed lineup data") : "Not available yet", home: lineupRows.filter(row => Number(row.team_id) === Number(homeTeam.id) && Number(row.type_id) === 11).map(row => ({ name: playerLabel(row), position: row.position && row.position.name || "Position unavailable" })), away: lineupRows.filter(row => Number(row.team_id) === Number(awayTeam.id) && Number(row.type_id) === 11).map(row => ({ name: playerLabel(row), position: row.position && row.position.name || "Position unavailable" })) },
+          predictionImpact: {
+            applied: false,
+            status: "Not applied",
+            reason: "The available feed does not consistently provide verified player importance, minutes, role and replacement quality. JUDY AI will not change score probabilities based only on an absence label."
+          },
           source: "Sportmonks fixture sidelined and lineup data",
-          note: "Only provider-listed absences and lineup entries are shown. Missing information is not inferred."
+          note: "Only provider-listed unavailable players and lineup entries are shown. Unknown status is not treated as fit or injured."
         };
         const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
         const result = {
