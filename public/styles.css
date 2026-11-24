@@ -294,3 +294,37 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 
 .daily-report-actions{display:flex;gap:8px;flex-wrap:wrap}.daily-report-actions button{min-width:112px}
 @media(max-width:680px){.daily-report-actions{display:grid;grid-template-columns:1fr;width:100%}.daily-report-actions button{width:100%}}
+
+
+/* Focused Daily Prediction Report printing and PDF saving */
+@media print {
+  @page { size: auto; margin: 14mm; }
+  html, body { background: #fff !important; color: #111 !important; }
+  body.print-daily-report .app-shell { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+  body.print-daily-report .app-shell > * { display: none !important; }
+  body.print-daily-report .app-shell > main { display: block !important; }
+  body.print-daily-report main > *:not(#performance-dashboard) { display: none !important; }
+  body.print-daily-report #performance-dashboard > *:not(#daily-prediction-report) { display: none !important; }
+  body.print-daily-report #daily-prediction-report { display: block !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: #fff !important; color: #111 !important; }
+  body.print-daily-report .daily-report-heading { display: block !important; margin-bottom: 14px !important; }
+  body.print-daily-report .daily-report-heading h3 { color: #111 !important; font-size: 22pt !important; }
+  body.print-daily-report .daily-report-heading .eyebrow,
+  body.print-daily-report .daily-report-heading p:last-child { color: #444 !important; }
+  body.print-daily-report .daily-report-actions,
+  body.print-daily-report .daily-report-tools { display: none !important; }
+  body.print-daily-report .daily-report-status { color: #333 !important; font-size: 9pt !important; }
+  body.print-daily-report .daily-report-list { display: block !important; }
+  body.print-daily-report .daily-report-card { break-inside: avoid; margin: 0 0 10px !important; padding: 11px !important; border: 1px solid #bbb !important; background: #fff !important; color: #111 !important; }
+  body.print-daily-report .daily-report-rank { background: #eee !important; color: #111 !important; }
+  body.print-daily-report .daily-report-match strong,
+  body.print-daily-report .daily-report-prob,
+  body.print-daily-report .daily-report-scores strong,
+  body.print-daily-report .daily-report-meta { color: #111 !important; }
+  body.print-daily-report .daily-report-match small,
+  body.print-daily-report .daily-report-prob small,
+  body.print-daily-report .daily-report-disclaimer { color: #444 !important; }
+  body.print-daily-report .daily-report-scores { gap: 8px !important; }
+  body.print-daily-report .daily-report-scores > div { background: #f7f7f7 !important; border-color: #ccc !important; }
+  body.print-daily-report .daily-report-scores span { color: #222 !important; }
+  body.print-daily-report .daily-report-empty { color: #333 !important; border-color: #aaa !important; }
+}
