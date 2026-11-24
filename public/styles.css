@@ -272,3 +272,22 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .confidence-table-row strong{font-size:10px}.confidence-table-row b{color:var(--green);font-size:11px}
 .confidence-empty{font-size:10px;line-height:1.5;color:var(--muted);padding:10px;border:1px dashed var(--line);border-radius:8px}
 @media(max-width:700px){.confidence-centre{padding:13px}.confidence-model-grid{grid-template-columns:1fr}}
+
+/* Daily Prediction Report */
+.daily-report{margin:22px 0 26px;padding:18px;border:1px solid #365344;border-radius:16px;background:linear-gradient(145deg,#10241f,#0d1a29)}
+.daily-report-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}.daily-report-heading h3{margin:0;font-size:20px}.daily-report-heading p:last-child{margin:7px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.daily-report-tools{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1fr);gap:10px;margin:15px 0}
+.daily-report-tools label{display:grid;gap:6px;color:#9fb2c7;font-size:8px;font-weight:850;letter-spacing:.8px}
+.daily-report-tools input,.daily-report-tools select{width:100%;min-width:0;padding:11px 12px;border:1px solid #345044;border-radius:9px;background:#0b1918;color:#eaf1f8;font:inherit;font-size:11px}
+.daily-report-status{margin:10px 0;color:#9fb2c7;font-size:10px}.daily-report-list{display:grid;gap:10px}
+.daily-report-card{padding:13px;border:1px solid #2a473e;border-radius:12px;background:#0b1918}
+.daily-report-card-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px}
+.daily-report-rank{display:grid;place-items:center;width:29px;height:29px;border-radius:9px;background:#1c3425;color:var(--green);font-size:11px;font-weight:900}
+.daily-report-match{min-width:0}.daily-report-match strong,.daily-report-match small{display:block}.daily-report-match strong{font-size:12px;overflow-wrap:anywhere}.daily-report-match small{margin-top:5px;color:var(--muted);font-size:9px;line-height:1.45}
+.daily-report-prob{color:var(--green);font-size:17px;text-align:right;white-space:nowrap}.daily-report-prob small{display:block;color:var(--muted);font-size:8px;font-weight:600}
+.daily-report-scores{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.daily-report-scores>div{min-width:0;padding:10px;border:1px solid #263d53;border-radius:9px;background:#101f2b}
+.daily-report-scores span{display:block;color:var(--green);font-size:8px;font-weight:850;letter-spacing:.7px}.daily-report-scores strong{display:block;margin-top:7px;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+.daily-report-meta{display:flex;justify-content:space-between;gap:8px;margin-top:10px;color:var(--muted);font-size:8px;line-height:1.5}
+.daily-report-empty{padding:16px;border:1px dashed #345044;border-radius:10px;color:var(--muted);font-size:11px;line-height:1.6}
+.daily-report-disclaimer{margin:12px 0 0;color:#8295a9;font-size:9px;line-height:1.6}#daily-prediction-report{scroll-margin-top:82px}
+@media(max-width:680px){.daily-report{padding:13px}.daily-report-heading{align-items:flex-start;flex-direction:column}.daily-report-heading .secondary-button{width:100%}.daily-report-tools,.daily-report-scores{grid-template-columns:1fr}.daily-report-meta{flex-direction:column}.daily-report-prob{font-size:15px}}
