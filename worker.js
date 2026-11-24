@@ -206,6 +206,7 @@ async function storePrediction(env, result) {
     modelDiagnostics: result.modelDiagnostics,
     teamIntelligence: result.teamIntelligence || null,
     playerWatch: result.playerWatch || null,
+    dataQuality: result.dataQuality || null,
     sampleSize: result.sampleSize || null,
     confidence: result.confidence || null,
     experimental: result.experimental === true,
@@ -478,7 +479,8 @@ export default {
               run.fixturesChecked++;
               continue;
             }
-            const kickoffTime = new Date(String(record.fixture && record.fixture.startingAt || "").replace(" ", "T") + "Z").getTime();
+            const kickoffRaw = String(record.fixture && record.fixture.startingAt || "").replace(" ", "T");
+            const kickoffTime = new Date(/[zZ]|[+-]\\d{2}:\\d{2}$/.test(kickoffRaw) ? kickoffRaw : kickoffRaw + "Z").getTime();
             if (!Number.isFinite(kickoffTime) || kickoffTime > Date.now()) continue;
             run.dueFixtures++;
             const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
