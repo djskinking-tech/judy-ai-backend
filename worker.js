@@ -191,10 +191,18 @@ async function storePrediction(env, result) {
     try {
       const record = JSON.parse(existing);
       let changed = false;
-      if (record && !record.teamIntelligence && result.teamIntelligence) {
-        record.teamIntelligence = result.teamIntelligence;
-        record.teamIntelligenceAddedAt = new Date().toISOString();
-        changed = true;
+      if (record && result.teamIntelligence) {
+        const oldRows = [record.teamIntelligence && record.teamIntelligence.home, record.teamIntelligence && record.teamIntelligence.away]
+          .flatMap(team => Array.isArray(team && team.lastFive) ? team.lastFive : []);
+        const newRows = [result.teamIntelligence.home, result.teamIntelligence.away]
+          .flatMap(team => Array.isArray(team && team.lastFive) ? team.lastFive : []);
+        const oldEnriched = oldRows.filter(row => row && row.opponentName && row.date).length;
+        const newEnriched = newRows.filter(row => row && row.opponentName && row.date).length;
+        if (!record.teamIntelligence || newEnriched > oldEnriched) {
+          record.teamIntelligence = result.teamIntelligence;
+          record.teamIntelligenceAddedAt = new Date().toISOString();
+          changed = true;
+        }
       }
       if (record && !record.playerWatch && result.playerWatch) {
         record.playerWatch = result.playerWatch;
@@ -1487,10 +1495,15 @@ export default {
               const ht = resultFor(match, "ht");
               if (!ft) return null;
               const when = match.matchDateTimeUTC || match.matchDateTime;
+              const team1Name = match.team1 && match.team1.teamName || null;
+              const team2Name = match.team2 && match.team2.teamName || null;
               return {
                 fixtureId: match.matchID,
                 date: when,
                 venue: isHome ? "home" : "away",
+                teamName: isHome ? team1Name : team2Name,
+                opponentName: isHome ? team2Name : team1Name,
+                opponentGoals: isHome ? ft.away : ft.home,
                 ft: { scored: isHome ? ft.home : ft.away, conceded: isHome ? ft.away : ft.home },
                 ht: ht ? { scored: isHome ? ht.home : ht.away, conceded: isHome ? ht.away : ht.home } : null
               };
@@ -1531,13 +1544,28 @@ export default {
             hht.scored !== null && hht.conceded !== null && aht.scored !== null && aht.conceded !== null;
           const htHome = htReady ? expected(hht.scored, aht.conceded) : null;
           const htAway = htReady ? expected(aht.scored, hht.conceded) : null;
-          const recentBlock = (form, name) => ({
-            team: name, matchesAnalysed: form.length,
-            lastFive: form.slice(0,5).map(row => ({
-              date: row.date, goalsFor: row.ft.scored, goalsAgainst: row.ft.conceded,
-              outcome: row.ft.scored > row.ft.conceded ? "W" : row.ft.scored < row.ft.conceded ? "L" : "D"
-            }))
-          });
+          const recentBlock = (form, name, preferredVenue) => {
+            const venueRows = form.filter(row => row.venue === preferredVenue);
+            const selected = venueRows.length >= 2 ? venueRows : form;
+            const wins = selected.filter(row => row.ft.scored > row.ft.conceded).length;
+            const draws = selected.filter(row => row.ft.scored === row.ft.conceded).length;
+            const losses = selected.filter(row => row.ft.scored < row.ft.conceded).length;
+            const avg = values => values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null;
+            return {
+              team: name, matchesAnalysed: form.length,
+              venueSplit: venueRows.length >= 2 ? preferredVenue : "all",
+              venueMatches: selected.length, wins, draws, losses,
+              averageGoalsFor: avg(selected.map(row => row.ft.scored)),
+              averageGoalsAgainst: avg(selected.map(row => row.ft.conceded)),
+              lastFive: form.slice(0,5).map(row => ({
+                date: row.date, venue: row.venue, teamName: row.teamName || name,
+                opponentName: row.opponentName || null,
+                goalsFor: row.ft.scored, goalsAgainst: row.ft.conceded,
+                opponentGoals: row.opponentGoals == null ? row.ft.conceded : row.opponentGoals,
+                outcome: row.ft.scored > row.ft.conceded ? "W" : row.ft.scored < row.ft.conceded ? "L" : "D"
+              }))
+            };
+          };
           const firstHalfHomeCount = homeForm.filter(row => row.ht).length;
         const firstHalfAwayCount = awayForm.filter(row => row.ht).length;
         const confidence = Math.min(homeForm.length, awayForm.length) >= 10 &&
@@ -1572,8 +1600,8 @@ export default {
               interpretation: "Confidence describes the size of the available historical sample, not the chance of a correct score."
             },
             teamIntelligence: {
-              home: recentBlock(homeForm, target.team1.teamName),
-              away: recentBlock(awayForm, target.team2.teamName),
+              home: recentBlock(homeForm, target.team1.teamName, "home"),
+              away: recentBlock(awayForm, target.team2.teamName, "away"),
               source: "OpenLigaDB completed team matches",
               limitations: ["No verified injury, suspension or lineup feed is connected."]
             },
@@ -1609,7 +1637,7 @@ export default {
       }
 
       const cache = caches.default;
-      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v4/" + fixtureId);
+      const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/predictions/v5/" + fixtureId);
       const cached = await cache.match(cacheKey);
       if (cached) {
         const cachedResult = await cached.clone().json();
