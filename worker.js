@@ -2331,7 +2331,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v12/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v13/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2417,7 +2417,7 @@ export default {
       let fallbackNote = null;
       const openLigaDiagnostics = [];
       const openLigaCatalogueDiagnostics = { httpStatus: null, cacheHit: false, discovered: 0, added: 0 };
-      if (!matches.length) {
+      {
         const openLigaRows = [];
         const season = Number(date.slice(0, 4)) - (Number(date.slice(5, 7)) < 7 ? 1 : 0);
         const leagues = [
@@ -2552,12 +2552,25 @@ export default {
             });
           }
         }
+        const normaliseFixtureTeam = value => String(value || "")
+          .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+          .toLowerCase().replace(/\\b(fc|cf|afc|sc|ac)\\b/g, "")
+          .replace(/[^a-z0-9]/g, "");
+        const knownFixtureKeys = new Set(matches.map(row =>
+          date + "|" + normaliseFixtureTeam(row.homeTeam) + "|" + normaliseFixtureTeam(row.awayTeam)
+        ));
         const uniqueOpenLiga = new Map(openLigaRows.map(row => [row.id, row]));
-        matches = [...uniqueOpenLiga.values()];
-        if (matches.length) {
-          fixtureSource = "OpenLigaDB";
-          source = "openligadb_fallback";
-          fallbackNote = "Free community fixture source covering selected competitions including the Champions League. Experimental score predictions can use recent OpenLigaDB team history when enough verified results are available. Community data may be incomplete; bookmaker odds are not available for these fixture IDs.";
+        for (const row of uniqueOpenLiga.values()) {
+          const key = date + "|" + normaliseFixtureTeam(row.homeTeam) + "|" + normaliseFixtureTeam(row.awayTeam);
+          if (knownFixtureKeys.has(key)) continue;
+          knownFixtureKeys.add(key);
+          matches.push(row);
+        }
+        if (uniqueOpenLiga.size) {
+          const hasSportmonks = matches.some(row => row && row.fixtureSource === "Sportmonks");
+          fixtureSource = hasSportmonks ? "Sportmonks + OpenLigaDB" : "OpenLigaDB";
+          source = hasSportmonks ? "combined_provider_feeds" : "openligadb_fallback";
+          fallbackNote = "JUDY merges available Sportmonks fixtures with free OpenLigaDB community schedules. Coverage is broader but not exhaustive worldwide; community data may be incomplete. Predictions are enabled only for fixture sources with verified team-history mapping; bookmaker odds may be unavailable.";
         }
       }
 
@@ -2565,7 +2578,7 @@ export default {
       // without API keys. Merge only fixtures missing from the current free
       // fallback set; never convert these IDs into Sportmonks prediction IDs.
       const openFootballDiagnostics = [];
-      if (fixtureSource !== "Sportmonks" || !matches.length) {
+      {
         const openFootballSeason = Number(date.slice(0, 4)) - (Number(date.slice(5, 7)) < 7 ? 1 : 0);
         const seasonFolder = openFootballSeason + "-" + String(openFootballSeason + 1).slice(-2);
         const competitions = [
@@ -2650,9 +2663,9 @@ export default {
         }
         const openFootballCount = matches.filter(match => match.fixtureSource === "OpenFootball").length;
         if (openFootballCount) {
-          const hasOpenLiga = matches.some(match => match.fixtureSource === "OpenLigaDB");
-          fixtureSource = hasOpenLiga ? "OpenLigaDB + OpenFootball" : "OpenFootball";
-          source = hasOpenLiga ? "combined_free_fallback" : "openfootball_fallback";
+          const sourceNames = [...new Set(matches.map(match => match && match.fixtureSource).filter(Boolean))];
+          fixtureSource = sourceNames.join(" + ") || "OpenFootball";
+          source = sourceNames.length > 1 ? "combined_provider_feeds" : "openfootball_fallback";
           fallbackNote = (fallbackNote ? fallbackNote + " " : "") +
             "Also includes OpenFootball public-domain schedules for selected European leagues. Coverage may be incomplete; kickoff timezone is not supplied by this source. Predictions and bookmaker odds are disabled for these fixtures.";
         }
@@ -2705,8 +2718,8 @@ export default {
       const result = {
         app: "JUDY AI",
         success: true,
-        backendVersion: "openfootball-fallback-v4",
-        buildMarker: "fixture-mapping-safety-2026-11-24",
+        backendVersion: "multi-source-fixtures-v5",
+        buildMarker: "merge-sportmonks-openligadb-openfootball-2026-11-25",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
