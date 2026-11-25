@@ -367,9 +367,9 @@ function renderMatches(matches) {
     const supportsOdds = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '" data-fixture-id="' + escapeHtml(fixtureId) + '">' + (fixtureIsFinished(match) ? "Match finished" : "Generate AI predictions") + '</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
+      ? '<div class="prediction-actions">' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
         (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
-        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
+        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
       '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span>' +
@@ -396,16 +396,12 @@ async function loadSavedPredictions(matches) {
     ids.forEach(function (id) {
       const saved = payload.predictions[id];
       const panel = document.getElementById("prediction-" + id);
-      const button = document.querySelector(".prediction-button[data-fixture-id=\"" + id + "\"]");
-      if (!panel || !button) return;
+      if (!panel) return;
       if (!saved) {
-        if (button.dataset.finished === "true") {
+        if (panel.dataset.finished === "true") {
           panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>No pre-match prediction was saved. The actual score is shown above; prediction accuracy cannot be calculated.</b></div>';
-          button.textContent = "Match finished";
-          button.disabled = true;
         } else {
-          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending</b></div>';
-          button.textContent = "Generate now";
+          panel.innerHTML = '<div class="prediction-label"><span>Prediction status</span><b>Automatic preparation pending. JUDY AI will display a prediction when verified match history is sufficient.</b></div>';
         }
         return;
       }
@@ -414,8 +410,6 @@ async function loadSavedPredictions(matches) {
         '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
         dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
         '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
-      button.textContent = "Prediction saved";
-      button.disabled = true;
     });
   } catch (error) {
     console.warn("Could not load saved predictions:", error);
@@ -714,6 +708,4 @@ fixturesBox.addEventListener("click", function (event) {
     loadFixtureOdds(oddsButton);
     return;
   }
-  const button = event.target.closest(".prediction-button");
-  if (button) generatePrediction(button);
 });
