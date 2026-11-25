@@ -1178,10 +1178,22 @@ export default {
         if (!rawIds.length && autoMode) {
           const end = new Date(beforeParam + "T23:59:59Z");
           const start = new Date(end.getTime() - (lookbackDays - 1) * 86400000).toISOString().slice(0, 10);
-          const rangeFixtures = await sportmonks("fixtures/between/" + start + "/" + beforeParam, {
-            include: "participants;league;scores;state", per_page: "50", order: "desc"
-          });
-          const finished = (Array.isArray(rangeFixtures) ? rangeFixtures : []).filter(f => {
+          // Page through the historical date-range results instead of relying
+          // on page 1 only. Some date windows return sparse or unrelated fixtures
+          // on the first page, causing false "no eligible fixtures" responses.
+          const rangeFixtures = [];
+          let rangePage = 1;
+          let rangePageRows = [];
+          const maxRangePages = 5;
+          do {
+            rangePageRows = await sportmonks("fixtures/between/" + start + "/" + beforeParam, {
+              include: "participants;league;scores;state", per_page: "50", order: "desc", page: String(rangePage)
+            });
+            if (Array.isArray(rangePageRows)) rangeFixtures.push(...rangePageRows);
+            rangePage++;
+          } while (Array.isArray(rangePageRows) && rangePageRows.length === 50 && rangePage <= maxRangePages);
+          const uniqueRangeFixtures = [...new Map(rangeFixtures.filter(f => f && f.id).map(f => [String(f.id), f])).values()];
+          const finished = uniqueRangeFixtures.filter(f => {
             const stateName = f.state && String(f.state.name || "").toLowerCase();
             const kickoffTime = new Date(String(f.starting_at || "").replace(" ", "T") + "Z").getTime();
             const hasFullTimeScore = Array.isArray(f.scores) && f.scores.some(score =>
@@ -1202,9 +1214,11 @@ export default {
             from: start,
             through: beforeParam,
             lookbackDays,
-            eligibleFixturesFoundInReturnedPage: finished.length,
+            eligibleFixturesFoundAcrossPages: finished.length,
+            pagesFetched: Math.min(rangePage - 1, maxRangePages),
+            pageLimitReached: rangePage > maxRangePages && Array.isArray(rangePageRows) && rangePageRows.length === 50,
             selectedFixtures: rawIds.length,
-            note: "Searches one Sportmonks date-range page (up to 50 fixtures), then backtests the most recent eligible completed fixtures."
+            note: "Searches up to 5 Sportmonks date-range pages (250 fixtures maximum), then backtests the most recent eligible completed fixtures."
           };
         } else if (!rawIds.length) {
           const dayFixtures = await sportmonks("fixtures/date/" + dateParam, {
