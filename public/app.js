@@ -367,7 +367,7 @@ function renderMatches(matches) {
     const supportsOdds = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
     const actions = supportsPredictions
-      ? '<div class="prediction-actions">' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
+      ? '<div class="prediction-actions"><button class="predict-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Generate prediction</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
         (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
         '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>1X2 outcome</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
@@ -751,6 +751,8 @@ if (settingsClose) settingsClose.addEventListener("click", function () { toggleS
 if (appSettings.autoLoadFixtures) loadFixtures();
 
 fixturesBox.addEventListener("click", function (event) {
+  const predictButton = event.target.closest(".predict-button");
+  if (predictButton) { generatePrediction(predictButton); return; }
   const h2hButton = event.target.closest(".h2h-button");
   if (h2hButton) { loadHeadToHead(h2hButton); return; }
   const oddsButton = event.target.closest(".odds-button");
