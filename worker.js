@@ -2480,6 +2480,7 @@ export default {
         const kickoffFormatter = new Intl.DateTimeFormat("en-CA", {
           timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit"
         });
+        let openLigaResultLookups = 0;
         for (const league of leagues) {
           try {
             const apiUrl = "https://api.openligadb.de/getmatchdata/" + league.shortcut + "/" + season;
@@ -2503,8 +2504,45 @@ export default {
                 }));
               }
             }
+            const rowsForDate = rows.filter(row => {
+              if (!row || !row.matchID || !row.team1 || !row.team2) return false;
+              const rawUtc = row.matchDateTimeUTC || null;
+              const kickoff = rawUtc ? new Date(rawUtc) : null;
+              const localDate = kickoff && !Number.isNaN(kickoff.getTime())
+                ? kickoffFormatter.format(kickoff) : String(row.matchDateTime || "").slice(0, 10);
+              return localDate === date;
+            });
+            // Season schedule feeds omit score breakdowns. Fetch cached match
+            // details for completed fixtures so yesterday's FT and HT results
+            // are available to the fixture cards.
+            const detailTargets = rowsForDate.filter(row =>
+              row.matchIsFinished === true && !Array.isArray(row.matchResults)
+            ).slice(0, Math.max(0, 20 - openLigaResultLookups));
+            openLigaResultLookups += detailTargets.length;
+            const resultDetails = new Map();
+            await Promise.all(detailTargets.map(async row => {
+              const resultKey = new Request("https://judy-ai-cache.example/openligadb/result/v1/" + String(row.matchID));
+              try {
+                const cachedResult = await caches.default.match(resultKey);
+                if (cachedResult) {
+                  resultDetails.set(String(row.matchID), await cachedResult.json());
+                  return;
+                }
+                const resultResponse = await fetch("https://api.openligadb.de/getmatchdata/" + String(row.matchID), {
+                  headers: { "Accept": "application/json" }
+                });
+                if (!resultResponse.ok) return;
+                const resultBody = await resultResponse.json();
+                resultDetails.set(String(row.matchID), resultBody);
+                await caches.default.put(resultKey, new Response(JSON.stringify(resultBody), {
+                  headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
+                }));
+              } catch (detailError) {
+                // Keep the fixture visible even when its separate score lookup fails.
+              }
+            }));
             let dateMatches = 0;
-            for (const row of rows) {
+            for (const row of rowsForDate) {
               if (!row || !row.matchID || !row.team1 || !row.team2) continue;
               const rawUtc = row.matchDateTimeUTC || null;
               const kickoff = rawUtc ? new Date(rawUtc) : null;
@@ -2519,7 +2557,9 @@ export default {
                 : (row.matchDateTime ? String(row.matchDateTime).slice(11, 16) + " (provider time; timezone unverified)" : "Kick-off time TBC");
               const homeTeam = row.team1.teamName || "Home team";
               const rawAwayTeam = row.team2.teamName || "Away team";
-              const resultRows = Array.isArray(row.matchResults) ? row.matchResults : [];
+              const detailedRow = resultDetails.get(String(row.matchID)) || row;
+              const resultRows = Array.isArray(row.matchResults) ? row.matchResults :
+                (Array.isArray(detailedRow.matchResults) ? detailedRow.matchResults : []);
               const halfTimeResult = resultRows.find(result =>
                 String(result.resultTypeKind || "").toLowerCase() === "halftime" ||
                 Number(result.resultTypeID) === 1 ||
@@ -2536,7 +2576,7 @@ export default {
               // Correct a confirmed community-feed error against the official
               // UEFA fixture list. Keep this narrow and auditable by date/team.
               const correction = verifiedOpenLigaCorrection(date, homeTeam);
-              const finished = row.matchIsFinished === true;
+              const finished = row.matchIsFinished === true || detailedRow.matchIsFinished === true;
               openLigaRows.push({
                 id: "openligadb:" + String(row.matchID),
                 fixtureSource: "OpenLigaDB",
