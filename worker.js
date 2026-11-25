@@ -341,7 +341,12 @@ export default {
         const batchKey = "autopregen:" + targetDate;
         let batch = await env.JUDY_PREDICTIONS.get(batchKey);
         batch = batch ? JSON.parse(batch) : null;
-        if (!batch || !Array.isArray(batch.fixtureIds)) {
+        // Refresh the fixture list when the queue is empty or fully processed.
+        // This catches fixtures published later in the day without resetting
+        // progress or reprocessing IDs already present in the queue.
+        const queueNeedsRefresh = !batch || !Array.isArray(batch.fixtureIds) ||
+          batch.fixtureIds.length === 0 || Number(batch.nextIndex || 0) >= batch.fixtureIds.length;
+        if (queueNeedsRefresh) {
           const fixtureIds = [];
           let pageNumber = 1;
           let pageRows = [];
@@ -355,17 +360,29 @@ export default {
             }
             pageNumber++;
           } while (Array.isArray(pageRows) && pageRows.length === 50 && pageNumber <= 6);
-          batch = {
-            date: targetDate,
-            createdAt: new Date().toISOString(),
-            fixtureIds: [...new Set(fixtureIds)],
-            nextIndex: 0,
-            generated: 0,
-            insufficientHistory: 0,
-            failed: 0,
-            pageLimitReached: pageNumber > 6 && pageRows.length === 50,
-            status: fixtureIds.length ? "in_progress" : "no_upcoming_fixtures"
-          };
+          const discoveredIds = [...new Set(fixtureIds)];
+          if (!batch || !Array.isArray(batch.fixtureIds)) {
+            batch = {
+              date: targetDate,
+              createdAt: new Date().toISOString(),
+              fixtureIds: discoveredIds,
+              nextIndex: 0,
+              generated: 0,
+              insufficientHistory: 0,
+              failed: 0,
+              pageLimitReached: pageNumber > 6 && pageRows.length === 50,
+              status: discoveredIds.length ? "in_progress" : "no_upcoming_fixtures"
+            };
+          } else {
+            const knownIds = new Set(batch.fixtureIds.map(String));
+            const newIds = discoveredIds.filter(id => !knownIds.has(id));
+            batch.fixtureIds = [...batch.fixtureIds.map(String), ...newIds];
+            batch.nextIndex = Math.min(Number(batch.nextIndex || 0), batch.fixtureIds.length);
+            batch.pageLimitReached = pageNumber > 6 && pageRows.length === 50;
+            batch.refreshedAt = new Date().toISOString();
+            batch.status = batch.nextIndex < batch.fixtureIds.length ? "in_progress" :
+              (batch.fixtureIds.length ? "completed" : "no_upcoming_fixtures");
+          }
         }
 
         const generatedBefore = batch.generated;
