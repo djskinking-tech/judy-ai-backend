@@ -210,3 +210,14 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .fixture-source-note.source-note-warning{border-color:#8b6a35;background:rgba(139,106,53,.12);color:#f1d7a5}
 .fixture-source-note[hidden]{display:none}
 .fixture-data-note{margin:10px 0 0;padding:7px 9px;border-left:2px solid #7b9fc4;background:rgba(123,159,196,.08);color:var(--muted);font-size:10px;line-height:1.4}
+
+.outcome-prediction{margin-top:12px;padding:12px;border:1px solid #38523c;border-radius:10px;background:linear-gradient(110deg,#13251d,#0b1724)}
+.outcome-prediction>strong{display:block;color:#d9f6b5;font-size:10px;letter-spacing:.8px;margin-bottom:10px}
+.outcome-prediction-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.outcome-pick{display:flex;flex-direction:column;gap:5px;padding:10px 7px;border-radius:8px;background:#0b1724;text-align:center}
+.outcome-pick span{font-size:10px;color:#a9bbce;font-weight:750}
+.outcome-pick b{font-size:20px;color:#d9e4ee}
+.outcome-pick small{min-height:10px;font-size:8px;color:#8295a9}
+.outcome-pick-best{border:1px solid #8abf54;background:#203522}
+.outcome-pick-best b,.outcome-pick-best small{color:#b9f36a}
+.outcome-prediction>small{display:block;margin-top:9px;color:#8295a9;font-size:9px;line-height:1.5}

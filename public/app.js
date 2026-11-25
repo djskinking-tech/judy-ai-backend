@@ -369,7 +369,7 @@ function renderMatches(matches) {
     const actions = supportsPredictions
       ? '<div class="prediction-actions">' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
         (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
-        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div></div>'
+        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>1X2 outcome</span><b>Checking saved prediction…</b></div></div>'
       : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
     return '<article class="fixture-card">' +
       '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span>' +
@@ -407,6 +407,7 @@ async function loadSavedPredictions(matches) {
       }
       panel.innerHTML = predictionOptionsMarkup("Half-time", saved.predictions && saved.predictions.halfTime) +
         predictionOptionsMarkup("Full-time", saved.predictions && saved.predictions.fullTime) +
+        outcomePredictionMarkup(saved.predictions && saved.predictions.fullTime) +
         '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
         dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
         '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
@@ -426,6 +427,39 @@ function predictionOptionsMarkup(period, data) {
     data.options.map(function (option) {
       return escapeHtml(option.score) + ' · ' + escapeHtml(option.probability) + '%';
     }).join('  |  ') + '</b></div>';
+}
+function outcomePredictionMarkup(fullTime) {
+  const expected = fullTime && fullTime.expectedGoals;
+  if (!expected || !Number.isFinite(Number(expected.home)) || !Number.isFinite(Number(expected.away))) {
+    return '<div class="prediction-label"><span>1X2 outcome</span><b>Not available — expected-goal data missing</b></div>';
+  }
+  function distribution(lambda) {
+    lambda = Math.max(0, Math.min(10, Number(lambda)));
+    const values = [Math.exp(-lambda)];
+    for (let goals = 1; goals <= 10; goals++) values.push(values[goals - 1] * lambda / goals);
+    return values;
+  }
+  const home = distribution(expected.home), away = distribution(expected.away);
+  let homeWin = 0, draw = 0, awayWin = 0;
+  for (let h = 0; h < home.length; h++) {
+    for (let a = 0; a < away.length; a++) {
+      const probability = home[h] * away[a];
+      if (h > a) homeWin += probability;
+      else if (h === a) draw += probability;
+      else awayWin += probability;
+    }
+  }
+  const total = homeWin + draw + awayWin;
+  if (!Number.isFinite(total) || total <= 0) return "";
+  const values = [homeWin / total * 100, draw / total * 100, awayWin / total * 100];
+  const rounded = values.map(value => Math.round(value));
+  rounded[values.indexOf(Math.max.apply(null, values))] += 100 - rounded.reduce((sum, value) => sum + value, 0);
+  const labels = ["1 · Home", "X · Draw", "2 · Away"];
+  const best = values.indexOf(Math.max.apply(null, values));
+  return '<div class="outcome-prediction"><strong>JUDY AI · 1X2 PREDICTION</strong><div class="outcome-prediction-grid">' +
+    labels.map((label, index) => '<div class="outcome-pick' + (index === best ? ' outcome-pick-best' : '') + '"><span>' + label + '</span><b>' + rounded[index] + '%</b>' +
+      (index === best ? '<small>Most likely</small>' : '<small>&nbsp;</small>') + '</div>').join("") +
+    '</div><small>Model-derived from the full-time expected goals · estimates, not guarantees.</small></div>';
 }
 function predictionOutcomeMarkup(payload) {
   const tracking = payload && payload.tracking ? payload.tracking : {};
