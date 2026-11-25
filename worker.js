@@ -1419,7 +1419,14 @@ export default {
               }, 409);
             }
           }
-          if (saved) return reply(saved);
+          const savedTeams = saved && saved.teamIntelligence
+            ? [saved.teamIntelligence.home, saved.teamIntelligence.away] : [];
+          const savedRows = savedTeams.flatMap(team => Array.isArray(team && team.lastFive) ? team.lastFive : []);
+          const savedHistoryComplete = savedRows.length > 0 &&
+            savedRows.every(row => row && row.opponentName && row.date) &&
+            savedTeams.every(team => team && team.wins != null && team.draws != null &&
+              team.losses != null && team.averageGoalsFor != null && team.averageGoalsAgainst != null);
+          if (saved && savedHistoryComplete) return reply(saved);
           const matchId = fixtureId.split(":")[1];
           const fixtureResponse = await fetch("https://api.openligadb.de/getmatchdata/" + matchId, {
             headers: { "Accept": "application/json" }
@@ -1622,6 +1629,13 @@ export default {
           if (env.JUDY_PREDICTIONS) {
             try { trackingSaveStatus = await storePrediction(env, result); }
             catch { trackingSaveStatus = "save_failed"; }
+          }
+          // Keep the originally saved pre-kickoff prediction unchanged while
+          // allowing incomplete historical team intelligence to be enriched.
+          if (saved) {
+            result.predictions = saved.predictions;
+            result.baselineV1 = saved.baselineV1 || result.baselineV1;
+            result.fixture = saved.fixture || result.fixture;
           }
           result.tracking = { saveStatus: trackingSaveStatus };
           return reply(result);
