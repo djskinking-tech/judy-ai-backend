@@ -356,33 +356,40 @@ function renderMatches(matches) {
     return;
   }
   countBox.textContent = matches.length + (matches.length === 1 ? " MATCH" : " MATCHES");
-  fixturesBox.innerHTML = matches.map(function (match) {
-    const home = teamName(match, "home");
-    const away = teamName(match, "away");
-    const league = leagueName(match);
-    const status = matchStatus(match);
-    const fixtureId = match.id || match.fixture_id || "";
-    const isOpenLiga = match.fixtureSource === "OpenLigaDB";
-    const supportsPredictions = match.predictionsSupported !== false && (isOpenLiga || match.fixtureSource !== "TheSportsDB");
-    const supportsOdds = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
-    const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\d+$/.test(String(fixtureId)));
-    const actions = supportsPredictions
-      ? '<div class="prediction-actions"><button class="prediction-button predict-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Generate prediction</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
-        (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
-        '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time score</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>1X2 outcome</span><b>Checking saved prediction…</b></div></div>'
-      : '<div class="prediction-label"><span>Prediction status</span><b>Not available for this fallback fixture source yet. No score prediction or bookmaker odds will be invented.</b></div>';
-    return '<article class="fixture-card">' +
-      '<div class="fixture-meta"><span class="fixture-league">' + escapeHtml(league) + '</span><span>' + escapeHtml(status) + '</span>' +
-      (match.fixtureSource ? '<span>' + escapeHtml(match.fixtureSource) + '</span>' : '') + '</div>' +
-      '<div class="fixture-teams">' +
-        '<div class="team">' + logoMarkup(teamLogo(match,"home")) + '<div class="team-name">' + escapeHtml(home) + '</div></div>' +
-        '<div class="versus fixture-score">' + escapeHtml(fixtureFinalScore(match) || "VS") + '</div>' +
-        '<div class="team">' + logoMarkup(teamLogo(match,"away")) + '<div class="team-name">' + escapeHtml(away) + '</div></div>' +
-      '</div>' +
-      '<div class="fixture-foot"><span>' + escapeHtml(matchTime(match)) + '</span><span>' + escapeHtml(match.country?.name || match.country || "Worldwide") + '</span></div>' +
-      (match.dataNote ? '<p class="fixture-data-note">' + escapeHtml(match.dataNote) + '</p>' : '') +
-      actions +
-      '</article>';
+  const leagues = new Map();
+  matches.forEach(function (match) {
+    const key = leagueName(match);
+    if (!leagues.has(key)) leagues.set(key, []);
+    leagues.get(key).push(match);
+  });
+  fixturesBox.innerHTML = Array.from(leagues.entries()).map(function (entry) {
+    const league = entry[0];
+    const cards = entry[1].map(function (match) {
+      const home = teamName(match, "home");
+      const away = teamName(match, "away");
+      const status = matchStatus(match);
+      const fixtureId = match.id || match.fixture_id || "";
+      const isOpenLiga = match.fixtureSource === "OpenLigaDB";
+      const supportsPredictions = match.predictionsSupported !== false && (isOpenLiga || match.fixtureSource !== "TheSportsDB");
+      const supportsOdds = supportsPredictions && (isOpenLiga || /^\\d+$/.test(String(fixtureId)));
+      const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\\d+$/.test(String(fixtureId)));
+      const actions = supportsPredictions
+        ? '<div class="prediction-actions"><button class="prediction-button predict-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">JUDY prediction</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
+          (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
+          '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>1X2</span><b>Checking saved prediction…</b></div></div>'
+        : '<div class="prediction-label"><span>Prediction</span><b>Not available for this fixture source yet.</b></div>';
+      return '<article class="fixture-card flashscore-fixture">' +
+        '<div class="flashscore-kickoff"><strong>' + escapeHtml(matchTime(match)) + '</strong><span>' + escapeHtml(status) + '</span></div>' +
+        '<div class="flashscore-team-row">' + logoMarkup(teamLogo(match,"home")) + '<b>' + escapeHtml(home) + '</b>' +
+          '<span class="flashscore-score">' + escapeHtml(fixtureFinalScore(match) || "–") + '</span></div>' +
+        '<div class="flashscore-team-row">' + logoMarkup(teamLogo(match,"away")) + '<b>' + escapeHtml(away) + '</b>' +
+          '<span class="flashscore-score">' + escapeHtml(fixtureFinalScore(match) || "–") + '</span></div>' +
+        (match.dataNote ? '<p class="fixture-data-note">' + escapeHtml(match.dataNote) + '</p>' : '') +
+        actions + '</article>';
+    }).join("");
+    return '<section class="league-fixture-group"><header class="league-fixture-heading"><span>🏆</span><strong>' +
+      escapeHtml(league) + '</strong><small>' + entry[1].length + ' MATCH' + (entry[1].length === 1 ? '' : 'ES') +
+      '</small></header><div class="league-fixture-list">' + cards + '</div></section>';
   }).join("");
   loadSavedPredictions(matches);
 }
