@@ -239,3 +239,4 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .flashscore-fixture .prediction-actions{margin-top:11px}
 @media(min-width:760px){.league-fixture-list{grid-template-columns:repeat(2,minmax(0,1fr))}.flashscore-fixture:nth-child(odd){border-right:1px solid #22364a}}
 @media(max-width:680px){.flashscore-fixture{padding:12px 11px}.flashscore-team-row b{font-size:12px}}
+.fixture-half-time{margin:5px 0 0 40px;color:var(--muted);font-size:10px;letter-spacing:.2px}.fixture-half-time strong{color:var(--cyan);font-variant-numeric:tabular-nums}
