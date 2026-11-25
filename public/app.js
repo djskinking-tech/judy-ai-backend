@@ -409,7 +409,7 @@ async function loadSavedPredictions(matches) {
         predictionOptionsMarkup("Full-time", saved.predictions && saved.predictions.fullTime) +
         outcomePredictionMarkup(saved.predictions && saved.predictions.fullTime) +
         '<p class="prediction-disclaimer">Saved automatically before kick-off · '+ escapeHtml(saved.confidence || "Confidence not rated") + ' confidence. Not guaranteed.</p>' +
-        dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
+        dataQualityMarkup(saved.dataQuality) + teamIntelligenceMarkup(saved.teamIntelligence, saved.fixture) + playerWatchMarkup(saved.playerWatch) + predictionOutcomeMarkup(saved) +
         '<p class="prediction-tracking tracking-confirmed">Original prediction saved before kick-off.</p>';
     });
   } catch (error) {
@@ -530,22 +530,24 @@ function dataQualityMarkup(data) {
     '<strong>Data limitations</strong>' + warningHtml +
     '<small>These checks describe data coverage, not the chance of winning.</small></section>';
 }
-function teamIntelligenceMarkup(data) {
+function teamIntelligenceMarkup(data, fixture) {
   if (!data || !data.home || !data.away) return "";
+  const homeName = fixture && fixture.homeTeam ? fixture.homeTeam : "Home team";
+  const awayName = fixture && fixture.awayTeam ? fixture.awayTeam : "Away team";
   function teamBlock(label, team) {
     const form = (team.lastFive || []).map(item => item.outcome).join(" · ") || "Unknown";
     const venueLabel = team.venueSplit === "home" ? "Home" :
       team.venueSplit === "away" ? "Away" : "All venues";
-    return '<div class="intelligence-team"><strong>' + label + '</strong>' +
-      '<span>Recent form: ' + escapeHtml(form) + '</span>' +
+    return '<div class="intelligence-team"><strong>' + escapeHtml(label) + '</strong>' +
+      '<span>Last ' + escapeHtml(String((team.lastFive || []).length)) + ' results: ' + escapeHtml(form) + '</span>' +
       '<span>W-D-L: ' + escapeHtml(team.wins == null || team.draws == null || team.losses == null ? "Not available" : team.wins + "-" + team.draws + "-" + team.losses) +
       ' · ' + escapeHtml(venueLabel) + ' sample: ' + escapeHtml(team.venueMatches == null ? "Not available" : team.venueMatches) + '</span>' +
       '<span>Avg goals: ' + escapeHtml(team.averageGoalsFor == null ? "Not available" : team.averageGoalsFor) + ' scored / ' +
       escapeHtml(team.averageGoalsAgainst == null ? "Not available" : team.averageGoalsAgainst) + ' conceded</span></div>';
   }
   return '<section class="team-intelligence"><h4>TEAM INTELLIGENCE · RECENT FORM</h4>' +
-    teamBlock("Home team", data.home) + teamBlock("Away team", data.away) +
-    '<small>Based on completed match results. Injuries, suspensions and lineups are not verified here.</small></section>';
+    teamBlock(homeName, data.home) + teamBlock(awayName, data.away) +
+    '<small>W = win, D = draw, L = loss. Based on completed match results. Injuries, suspensions and lineups are not verified here.</small></section>';
 }
 async function generatePrediction(button) {
   const fixtureId = button.dataset.fixtureId;
@@ -602,7 +604,7 @@ async function generatePrediction(button) {
       ' home / ' + escapeHtml(payload.sampleSize && payload.sampleSize.away != null ? payload.sampleSize.away : "—") +
       ' away matches analysed. Not guaranteed.</p>' +
       dataQualityMarkup(payload.dataQuality) +
-      teamIntelligenceMarkup(payload.teamIntelligence) +
+      teamIntelligenceMarkup(payload.teamIntelligence, payload.fixture) +
       playerWatchMarkup(payload.playerWatch) +
       predictionOutcomeMarkup(payload) +
       '<p class="prediction-tracking ' + trackingClass + '">' + escapeHtml(trackingMessage) + '</p>';
