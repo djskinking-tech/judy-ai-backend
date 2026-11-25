@@ -2519,9 +2519,24 @@ export default {
                 : (row.matchDateTime ? String(row.matchDateTime).slice(11, 16) + " (provider time; timezone unverified)" : "Kick-off time TBC");
               const homeTeam = row.team1.teamName || "Home team";
               const rawAwayTeam = row.team2.teamName || "Away team";
+              const resultRows = Array.isArray(row.matchResults) ? row.matchResults : [];
+              const halfTimeResult = resultRows.find(result =>
+                String(result.resultTypeKind || "").toLowerCase() === "halftime" ||
+                Number(result.resultTypeID) === 1 ||
+                /half.?time|halbzeit/i.test(String(result.resultName || ""))
+              );
+              const fullTimeResult = resultRows.find(result =>
+                String(result.resultTypeKind || "").toLowerCase() === "after90minutes" ||
+                Number(result.resultTypeID) === 2 ||
+                /full.?time|endergebnis|endstand/i.test(String(result.resultName || ""))
+              );
+              const validScore = result => result &&
+                Number.isFinite(Number(result.pointsTeam1)) &&
+                Number.isFinite(Number(result.pointsTeam2));
               // Correct a confirmed community-feed error against the official
               // UEFA fixture list. Keep this narrow and auditable by date/team.
               const correction = verifiedOpenLigaCorrection(date, homeTeam);
+              const finished = row.matchIsFinished === true;
               openLigaRows.push({
                 id: "openligadb:" + String(row.matchID),
                 fixtureSource: "OpenLigaDB",
@@ -2530,10 +2545,16 @@ export default {
                 kickoffLabel,
                 homeTeam,
                 awayTeam: correction ? correction.awayTeam : rawAwayTeam,
+                homeLogo: row.team1.teamIconUrl || "",
+                awayLogo: row.team2.teamIconUrl || "",
+                homeGoals: !correction && finished && validScore(fullTimeResult) ? Number(fullTimeResult.pointsTeam1) : null,
+                awayGoals: !correction && finished && validScore(fullTimeResult) ? Number(fullTimeResult.pointsTeam2) : null,
+                halfTimeHomeGoals: !correction && finished && validScore(halfTimeResult) ? Number(halfTimeResult.pointsTeam1) : null,
+                halfTimeAwayGoals: !correction && finished && validScore(halfTimeResult) ? Number(halfTimeResult.pointsTeam2) : null,
                 dataNote: correction ? "Opponent corrected against official UEFA fixture list; prediction disabled because the provider's fixture ID maps to different teams." : null,
                 league: { name: row.leagueName || league.name },
                 country: league.country,
-                status: row.matchIsFinished ? "Finished" : "Scheduled"
+                status: finished ? "Finished" : "Scheduled"
               });
             }
             openLigaDiagnostics.push({
