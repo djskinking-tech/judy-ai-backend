@@ -333,7 +333,10 @@ export default {
       run.autoPredictionInsufficientHistory = 0;
       run.autoPredictionFailed = 0;
       const autoDateResults = [];
-      for (const dayOffset of [0, 1]) {
+      // Alternate today's and tomorrow's preparation across half-hour runs to keep
+      // each scheduled invocation comfortably below Cloudflare's subrequest ceiling.
+      const scheduledDateOffset = new Date().getUTCMinutes() < 30 ? 0 : 1;
+      for (const dayOffset of [scheduledDateOffset]) {
         const targetDate = nairobiDateOffset(dayOffset);
         const batchKey = "autopregen:" + targetDate;
         let batch = await env.JUDY_PREDICTIONS.get(batchKey);
@@ -368,7 +371,7 @@ export default {
         const generatedBefore = batch.generated;
         const insufficientBefore = batch.insufficientHistory;
         const failedBefore = batch.failed;
-        const endIndex = Math.min(batch.nextIndex + 3, batch.fixtureIds.length);
+        const endIndex = Math.min(batch.nextIndex + 1, batch.fixtureIds.length);
         for (let index = batch.nextIndex; index < endIndex; index++) {
           const fixtureId = batch.fixtureIds[index];
           let retryCurrent = false;
@@ -440,7 +443,7 @@ export default {
       run.openLigaAutoPredictionInsufficientHistory = 0;
       run.openLigaAutoPredictionFailed = 0;
       run.openLigaAutoPredictionByDate = [];
-      for (const dayOffset of [0, 1]) {
+      for (const dayOffset of [scheduledDateOffset]) {
         const targetDate = nairobiDateOffset(dayOffset);
         const batchKey = "autopregen-openliga:" + targetDate;
         let batch = await env.JUDY_PREDICTIONS.get(batchKey);
@@ -467,7 +470,7 @@ export default {
             String(error && error.message || error).slice(0, 180));
         }
         const pending = fixtures.filter(item => !batch.completedIds.includes(String(item.id)));
-        const selected = pending.slice(0, 2);
+        const selected = pending.slice(0, 1);
         let generated = 0;
         let insufficient = 0;
         let failed = 0;
@@ -532,7 +535,7 @@ export default {
       do {
         const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
         for (const key of page.keys || []) {
-          if (run.fixturesChecked >= 20) {
+          if (run.fixturesChecked >= 5) {
             run.limitReached = true;
             stop = true;
             break;
