@@ -551,8 +551,24 @@ function teamIntelligenceMarkup(data, fixture) {
     }).join("");
     const venueLabel = team.venueSplit === "home" ? "Home" :
       team.venueSplit === "away" ? "Away" : "All venues";
+    const venueRowsMarkup = function (rows, title) {
+      const items = Array.isArray(rows) ? rows : [];
+      const markup = items.map(function (item) {
+        const raw = item.date ? String(item.date).replace(" ", "T") : "";
+        const d = raw ? new Date(/[zZ]|[+-]\\d{2}:\\d{2}$/.test(raw) ? raw : raw + "Z") : null;
+        const dateLabel = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString() : "Date unavailable";
+        const team = item.teamName || label;
+        const opponent = item.opponentName || "Opponent unavailable";
+        const score = item.goalsFor + "–" + item.goalsAgainst;
+        return '<li><span>' + escapeHtml(dateLabel) + '</span><b>' + escapeHtml(team + " " + score + " " + opponent) + '</b><em>' + escapeHtml(item.outcome || "") + '</em></li>';
+      }).join("");
+      return '<div class="venue-history"><strong>' + title + ' (' + items.length + ')</strong>' +
+        (markup ? '<ul class="recent-match-list">' + markup + '</ul>' : '<small>No verified matches in this venue sample.</small>') + '</div>';
+    };
+    const venueHistory = Array.isArray(team.homeMatches) || Array.isArray(team.awayMatches)
+      ? venueRowsMarkup(team.homeMatches, "HOME MATCHES") + venueRowsMarkup(team.awayMatches, "AWAY MATCHES") : "";
     return '<div class="intelligence-team"><strong>' + escapeHtml(label) + '</strong>' +
-      (matchRows ? '<ul class="recent-match-list">' + matchRows + '</ul>' : '<span>Previous match names are not available from the data provider.</span>') +
+      (venueHistory || (matchRows ? '<ul class="recent-match-list">' + matchRows + '</ul>' : '<span>Previous match names are not available from the data provider.</span>')) +
       '<span>Recent form: ' + escapeHtml(form) + '</span>' +
       '<span>W-D-L: ' + escapeHtml(team.wins == null || team.draws == null || team.losses == null ? "Not available" : team.wins + "-" + team.draws + "-" + team.losses) +
       ' · ' + escapeHtml(venueLabel) + ' sample: ' + escapeHtml(team.venueMatches == null ? "Not available" : team.venueMatches) + '</span>' +
