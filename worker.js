@@ -2331,7 +2331,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v13/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v14/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2787,7 +2787,7 @@ export default {
         app: "JUDY AI",
         success: true,
         backendVersion: "multi-source-fixtures-v5",
-        buildMarker: "merge-sportmonks-openligadb-openfootball-2026-11-25",
+        buildMarker: "historical-results-home-away-scores-2026-11-25",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
