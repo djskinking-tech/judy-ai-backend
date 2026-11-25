@@ -469,15 +469,28 @@ export default {
           run.errors.push("OpenLigaDB auto-preparation for " + targetDate + ": " +
             String(error && error.message || error).slice(0, 180));
         }
-        const pending = fixtures.filter(item => !batch.completedIds.includes(String(item.id)));
-        const selected = pending.slice(0, 1);
+        // Keep the queue moving: process a small group per run and avoid
+        // retrying an insufficient-history fixture on every scheduled invocation.
+        // A six-hour retry window gives later fixtures a turn while allowing
+        // history to improve before a previously ineligible match is reconsidered.
+        if (!batch.attemptedAt || typeof batch.attemptedAt !== "object") batch.attemptedAt = {};
+        const retryWindowMs = 6 * 60 * 60 * 1000;
+        const nowMs = Date.now();
+        const pending = fixtures.filter(item => {
+          const id = String(item.id);
+          if (batch.completedIds.includes(id)) return false;
+          const lastAttempt = Date.parse(batch.attemptedAt[id] || "");
+          return !Number.isFinite(lastAttempt) || nowMs - lastAttempt >= retryWindowMs;
+        });
+        const selected = pending.slice(0, 3);
         let generated = 0;
         let insufficient = 0;
         let failed = 0;
         for (const fixture of selected) {
+          const fixtureId = String(fixture.id);
           try {
             const response = await this.fetch(new Request(
-              WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(String(fixture.id)),
+              WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
               { method: "GET" }
             ), env, ctx);
             const result = await response.json();
@@ -486,22 +499,24 @@ export default {
               run.errors.push("OpenLigaDB auto-preparation paused by rate limiting; it will retry next scheduled run.");
               break;
             }
+            batch.attemptedAt[fixtureId] = new Date().toISOString();
             if (response.ok && result && result.success === true && result.predictions) {
-              batch.completedIds.push(String(fixture.id));
+              batch.completedIds.push(fixtureId);
               if (!(result.tracking && result.tracking.saveStatus === "already_saved")) generated++;
             } else if (result && result.status === "insufficient_history") {
               insufficient++;
-              // Keep this fixture pending so improved history can be retried later.
+              // Keep this fixture pending; retry after the cooldown window.
             } else {
               failed++;
-              run.errors.push("OpenLigaDB prediction " + fixture.id + ": " +
+              run.errors.push("OpenLigaDB prediction " + fixtureId + ": " +
                 String(result && (result.error || result.message) || "Prediction unavailable").slice(0, 160));
             }
           } catch (error) {
             if (error && error.status === 429) run.rateLimited = true;
             else {
+              batch.attemptedAt[fixtureId] = new Date().toISOString();
               failed++;
-              run.errors.push("OpenLigaDB prediction " + fixture.id + ": " +
+              run.errors.push("OpenLigaDB prediction " + fixtureId + ": " +
                 String(error && error.message || error).slice(0, 160));
             }
             if (run.rateLimited) break;
