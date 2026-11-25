@@ -1675,13 +1675,23 @@ export default {
               const participant = Array.isArray(f.participants)
                 ? f.participants.find(p => Number(p.id) === Number(teamId))
                 : null;
+              const otherParticipant = Array.isArray(f.participants)
+                ? f.participants.find(p => Number(p.id) !== Number(teamId))
+                : null;
+              const teamScore = goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF");
+              const otherScore = otherParticipant
+                ? goalsForAgainst(f, otherParticipant.id, "CURRENT") || goalsForAgainst(f, otherParticipant.id, "2ND_HALF")
+                : null;
               return {
                 fixtureId: f.id,
                 leagueId: f.league_id || (f.league && f.league.id) || null,
-                ft: goalsForAgainst(f, teamId, "CURRENT") || goalsForAgainst(f, teamId, "2ND_HALF"),
+                ft: teamScore,
                 ht: goalsForAgainst(f, teamId, "1ST_HALF"),
                 date: f.starting_at,
-                venue: participant && participant.meta ? participant.meta.location : null
+                venue: participant && participant.meta ? participant.meta.location : null,
+                teamName: participant && participant.name || null,
+                opponentName: otherParticipant && otherParticipant.name || null,
+                opponentGoals: otherScore ? otherScore.scored : null
               };
             })
             .filter(f => f.ft)
@@ -1759,8 +1769,11 @@ export default {
               date: item.date,
               fixtureId: item.fixtureId,
               venue: item.venue || "Unknown",
+              teamName: item.teamName || null,
+              opponentName: item.opponentName || null,
               goalsFor: item.ft.scored,
               goalsAgainst: item.ft.conceded,
+              opponentGoals: item.opponentGoals,
               outcome
             };
           });
