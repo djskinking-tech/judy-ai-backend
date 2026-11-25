@@ -221,3 +221,21 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 .outcome-pick-best{border:1px solid #8abf54;background:#203522}
 .outcome-pick-best b,.outcome-pick-best small{color:#b9f36a}
 .outcome-prediction>small{display:block;margin-top:9px;color:#8295a9;font-size:9px;line-height:1.5}
+
+/* Flashscore-inspired fixture list */
+.league-fixture-group{margin:0 0 17px;border:1px solid #263b50;border-radius:13px;overflow:hidden;background:#0d1927}
+.league-fixture-heading{display:flex;align-items:center;gap:9px;padding:12px 14px;background:#17283a;border-bottom:1px solid #2a4055}
+.league-fixture-heading>span{font-size:13px}.league-fixture-heading strong{font-size:11px;letter-spacing:.3px}.league-fixture-heading small{margin-left:auto;color:var(--muted);font-size:8px;letter-spacing:.8px}
+.league-fixture-list{display:grid;grid-template-columns:1fr}
+.flashscore-fixture{display:block;border:0;border-bottom:1px solid #22364a;border-radius:0;padding:12px 14px;background:transparent;animation:none}
+.flashscore-fixture:last-child{border-bottom:0}
+.flashscore-kickoff{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;color:var(--muted);font-size:9px}
+.flashscore-kickoff strong{color:#c8d6e4;font-variant-numeric:tabular-nums}
+.flashscore-team-row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:9px;min-height:27px}
+.flashscore-team-row img{width:19px;height:19px;object-fit:contain}
+.flashscore-team-row .team-placeholder{font-size:15px}
+.flashscore-team-row b{font-size:11px;font-weight:750;overflow-wrap:anywhere}
+.flashscore-score{min-width:35px;text-align:right;color:#dce7f2;font-size:12px;font-weight:850;font-variant-numeric:tabular-nums}
+.flashscore-fixture .prediction-actions{margin-top:11px}
+@media(min-width:760px){.league-fixture-list{grid-template-columns:repeat(2,minmax(0,1fr))}.flashscore-fixture:nth-child(odd){border-right:1px solid #22364a}}
+@media(max-width:680px){.flashscore-fixture{padding:12px 11px}.flashscore-team-row b{font-size:12px}}
