@@ -171,7 +171,7 @@ function teamLogo(match, side) {
   const obj = side === "home"
     ? (match.homeTeam || match.home || match.teams?.home || participant(match, "home"))
     : (match.awayTeam || match.away || match.teams?.away || participant(match, "away"));
-  return obj?.logo || obj?.image || obj?.image_path || "";
+  return obj?.logo || obj?.image || obj?.image_path || (side === "home" ? match.homeLogo : match.awayLogo) || "";
 }
 function matchTime(match) {
   if (match.kickoffLabel) return String(match.kickoffLabel);
@@ -195,27 +195,26 @@ function fixtureIsFinished(match) {
   const value = [state.state, state.name, state.short_name, state.developer_name, match.status].filter(Boolean).join(" ").toUpperCase();
   return /(^|\\b)(FT|AET|PEN|FULL TIME|AFTER EXTRA TIME|AFTER PENALTIES)(\\b|$)/.test(value);
 }
-function fixtureFinalScore(match) {
-  const participants = Array.isArray(match.participants) ? match.participants : [];
-  const home = participants.find(function (team) { return team.meta && team.meta.location === "home"; });
-  const away = participants.find(function (team) { return team.meta && team.meta.location === "away"; });
-  const rows = Array.isArray(match.scores) ? match.scores : [];
-  function goals(team) {
-    if (!team) return null;
-    const candidates = rows.filter(function (row) {
-      return Number(row.participant_id) === Number(team.id) &&
-        ["CURRENT", "2ND_HALF", "FULL_TIME", "FT"].includes(String(row.description || "").toUpperCase().replace(/[\s-]+/g, "_")) &&
-        row.score && row.score.goals !== null && row.score.goals !== undefined &&
-        Number.isFinite(Number(row.score.goals));
-    });
-    if (!candidates.length) return null;
-    const current = candidates.find(function (row) {
-      return String(row.description || "").toUpperCase() === "CURRENT";
-    });
-    return Number((current || candidates[0]).score.goals);
+function fixtureTeamScore(match, side) {
+  const directScore = side === "home" ? match.homeGoals : match.awayGoals;
+  if (directScore !== null && directScore !== undefined && Number.isFinite(Number(directScore))) {
+    return Number(directScore);
   }
-  const homeGoals = goals(home), awayGoals = goals(away);
-  return homeGoals === null || awayGoals === null ? null : homeGoals + " - " + awayGoals;
+  const participants = Array.isArray(match.participants) ? match.participants : [];
+  const team = participants.find(function (item) { return item.meta && item.meta.location === side; });
+  if (!team) return null;
+  const rows = Array.isArray(match.scores) ? match.scores : [];
+  const candidates = rows.filter(function (row) {
+    return Number(row.participant_id) === Number(team.id) &&
+      ["CURRENT", "2ND_HALF", "FULL_TIME", "FT"].includes(String(row.description || "").toUpperCase().replace(/[\s-]+/g, "_")) &&
+      row.score && row.score.goals !== null && row.score.goals !== undefined &&
+      Number.isFinite(Number(row.score.goals));
+  });
+  if (!candidates.length) return null;
+  const current = candidates.find(function (row) {
+    return String(row.description || "").toUpperCase() === "CURRENT";
+  });
+  return Number((current || candidates[0]).score.goals);
 }
 function logoMarkup(url) {
   if (!url) return '<span class="team-placeholder">⚽</span>';
@@ -381,9 +380,9 @@ function renderMatches(matches) {
       return '<article class="fixture-card flashscore-fixture">' +
         '<div class="flashscore-kickoff"><strong>' + escapeHtml(matchTime(match)) + '</strong><span>' + escapeHtml(status) + '</span></div>' +
         '<div class="flashscore-team-row">' + logoMarkup(teamLogo(match,"home")) + '<b>' + escapeHtml(home) + '</b>' +
-          '<span class="flashscore-score">' + escapeHtml(fixtureFinalScore(match) || "–") + '</span></div>' +
+          '<span class="flashscore-score">' + escapeHtml(fixtureTeamScore(match, "home") ?? "–") + '</span></div>' +
         '<div class="flashscore-team-row">' + logoMarkup(teamLogo(match,"away")) + '<b>' + escapeHtml(away) + '</b>' +
-          '<span class="flashscore-score">' + escapeHtml(fixtureFinalScore(match) || "–") + '</span></div>' +
+          '<span class="flashscore-score">' + escapeHtml(fixtureTeamScore(match, "away") ?? "–") + '</span></div>' +
         (match.dataNote ? '<p class="fixture-data-note">' + escapeHtml(match.dataNote) + '</p>' : '') +
         actions + '</article>';
     }).join("");
