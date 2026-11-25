@@ -5,7 +5,7 @@ function verifiedOpenLigaCorrection(date, homeTeam) {
   const corrections = [
     { date: "2026-11-25", homeTeam: "sabah", awayTeam: "Barcelona" }
   ];
-  const normalise = value => String(value || "").toLowerCase().replace(/\\b(fc|cf|afc|sc|ac)\\b/g, "").replace(/[^a-z0-9]/g, "");
+  const normalise = value => String(value || "").toLowerCase().replace(/\b(fc|cf|afc|sc|ac)\b/g, "").replace(/[^a-z0-9]/g, "");
   return corrections.find(row => row.date === String(date || "") &&
     normalise(row.homeTeam) === normalise(homeTeam)) || null;
 }
@@ -2553,11 +2553,18 @@ export default {
           }
         }
         const normaliseFixtureTeam = value => String(value || "")
-          .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
           .toLowerCase().replace(/\\b(fc|cf|afc|sc|ac)\\b/g, "")
           .replace(/[^a-z0-9]/g, "");
+        const fixtureTeamForDedupe = (row, side) => {
+          if (row && row[side + "Team"]) return row[side + "Team"];
+          const participants = Array.isArray(row && row.participants) ? row.participants : [];
+          const participant = participants.find(item => item && item.meta && item.meta.location === side);
+          return participant && (participant.name || participant.short_code) || "";
+        };
         const knownFixtureKeys = new Set(matches.map(row =>
-          date + "|" + normaliseFixtureTeam(row.homeTeam) + "|" + normaliseFixtureTeam(row.awayTeam)
+          date + "|" + normaliseFixtureTeam(fixtureTeamForDedupe(row, "home")) + "|" +
+          normaliseFixtureTeam(fixtureTeamForDedupe(row, "away"))
         ));
         const uniqueOpenLiga = new Map(openLigaRows.map(row => [row.id, row]));
         for (const row of uniqueOpenLiga.values()) {
@@ -2730,7 +2737,7 @@ export default {
         openLigaDiagnostics,
         openLigaCatalogueDiagnostics,
         openFootballDiagnostics,
-        predictionsSupported: fixtureSource === "Sportmonks" || fixtureSource === "OpenLigaDB",
+        predictionsSupported: matches.some(match => match && match.predictionsSupported !== false && (match.fixtureSource === "Sportmonks" || match.fixtureSource === "OpenLigaDB" || !match.fixtureSource)),
         pagination: {
           pages_fetched: primary.pagesFetched,
           page_limit_reached: primary.pageLimitReached,
