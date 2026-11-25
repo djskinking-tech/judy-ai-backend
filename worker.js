@@ -1930,12 +1930,26 @@ export default {
           });
           const venueRows = form.filter(item => item.venue === venue);
           const selected = venueRows.length >= 2 ? venueRows : form;
+          const formatVenueRows = rows => rows.slice(0, 10).map(item => ({
+            date: item.date,
+            venue: item.venue || "Unknown",
+            teamName: item.teamName || null,
+            opponentName: item.opponentName || null,
+            goalsFor: item.ft.scored,
+            goalsAgainst: item.ft.conceded,
+            opponentGoals: item.opponentGoals,
+            outcome: item.ft.scored > item.ft.conceded ? "W" : item.ft.scored < item.ft.conceded ? "L" : "D"
+          }));
+          const homeMatches = form.filter(item => item.venue === "home");
+          const awayMatches = form.filter(item => item.venue === "away");
           const wins = selected.filter(item => item.ft.scored > item.ft.conceded).length;
           const draws = selected.filter(item => item.ft.scored === item.ft.conceded).length;
           const losses = selected.filter(item => item.ft.scored < item.ft.conceded).length;
           return {
             matchesAnalysed: form.length,
             lastFive,
+            homeMatches: formatVenueRows(homeMatches),
+            awayMatches: formatVenueRows(awayMatches),
             venueSplit: venueRows.length >= 2 ? venue : "All venues (insufficient venue sample)",
             venueMatches: selected.length,
             wins, draws, losses,
