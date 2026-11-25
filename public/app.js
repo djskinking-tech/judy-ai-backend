@@ -538,7 +538,8 @@ function teamIntelligenceMarkup(data, fixture) {
     const matches = Array.isArray(team.lastFive) ? team.lastFive : [];
     const form = matches.map(item => item.outcome).join(" · ") || "Unknown";
     const matchRows = matches.map(item => {
-      const date = item.date ? new Date(String(item.date).replace(" ", "T") + "Z") : null;
+      const rawDate = item.date ? String(item.date).replace(" ", "T") : "";
+      const date = rawDate ? new Date(/[zZ]|[+-]\\d{2}:\\d{2}$/.test(rawDate) ? rawDate : rawDate + "Z") : null;
       const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString() : "Date unavailable";
       const opponent = item.opponentName || "Opponent unavailable";
       const score = item.opponentGoals == null
