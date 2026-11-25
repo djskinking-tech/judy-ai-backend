@@ -571,13 +571,17 @@ function teamIntelligenceMarkup(data, fixture) {
       const rawDate = item.date ? String(item.date).replace(" ", "T") : "";
       const date = rawDate ? new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(rawDate) ? rawDate : rawDate + "Z") : null;
       const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString() : "Date unavailable";
+      const teamName = item.teamName || label;
       const opponent = item.opponentName || "Opponent unavailable";
-      const score = item.opponentGoals == null
-        ? item.goalsFor + "–" + item.goalsAgainst
-        : item.venue === "home"
-          ? item.goalsFor + "–" + item.opponentGoals
-          : item.opponentGoals + "–" + item.goalsFor;
-      return '<li><span>' + escapeHtml(dateLabel) + '</span><b>' + escapeHtml(item.teamName || label) + ' ' + escapeHtml(score) + ' ' + escapeHtml(opponent) + '</b><em>' + escapeHtml(item.outcome) + '</em></li>';
+      const goalsFor = Number(item.goalsFor);
+      const goalsAgainst = Number(item.opponentGoals == null ? item.goalsAgainst : item.opponentGoals);
+      const score = item.venue === "away"
+        ? goalsAgainst + "–" + goalsFor
+        : goalsFor + "–" + goalsAgainst;
+      const matchLine = item.venue === "away"
+        ? opponent + " " + score + " " + teamName
+        : teamName + " " + score + " " + opponent;
+      return '<li><span>' + escapeHtml(dateLabel) + '</span><b>' + escapeHtml(matchLine) + '</b><em>' + escapeHtml(item.outcome) + '</em></li>';
     }).join("");
     const venueLabel = team.venueSplit === "home" ? "Home" :
       team.venueSplit === "away" ? "Away" : "All venues";
@@ -589,8 +593,15 @@ function teamIntelligenceMarkup(data, fixture) {
         const dateLabel = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString() : "Date unavailable";
         const team = item.teamName || label;
         const opponent = item.opponentName || "Opponent unavailable";
-        const score = item.goalsFor + "–" + item.goalsAgainst;
-        return '<li><span>' + escapeHtml(dateLabel) + '</span><b>' + escapeHtml(team + " " + score + " " + opponent) + '</b><em>' + escapeHtml(item.outcome || "") + '</em></li>';
+        const goalsFor = Number(item.goalsFor);
+        const goalsAgainst = Number(item.opponentGoals == null ? item.goalsAgainst : item.opponentGoals);
+        const score = item.venue === "away"
+          ? goalsAgainst + "–" + goalsFor
+          : goalsFor + "–" + goalsAgainst;
+        const matchLine = item.venue === "away"
+          ? opponent + " " + score + " " + team
+          : team + " " + score + " " + opponent;
+        return '<li><span>' + escapeHtml(dateLabel) + '</span><b>' + escapeHtml(matchLine) + '</b><em>' + escapeHtml(item.outcome || "") + '</em></li>';
       }).join("");
       return '<div class="venue-history"><strong>' + title + ' (' + items.length + ')</strong>' +
         (markup ? '<ul class="recent-match-list">' + markup + '</ul>' : '<small>No verified matches in this venue sample.</small>') + '</div>';
