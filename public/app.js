@@ -193,7 +193,7 @@ function leagueName(match) {
 function fixtureIsFinished(match) {
   const state = match.state || {};
   const value = [state.state, state.name, state.short_name, state.developer_name, match.status].filter(Boolean).join(" ").toUpperCase();
-  return /(^|\\b)(FT|AET|PEN|FULL TIME|AFTER EXTRA TIME|AFTER PENALTIES)(\\b|$)/.test(value);
+  return /(^|\\b)(FT|AET|PEN|FINISHED|COMPLETED|FULL TIME|AFTER EXTRA TIME|AFTER PENALTIES)(\\b|$)/.test(value);
 }
 function fixtureTeamScore(match, side) {
   const directScore = side === "home" ? match.homeGoals : match.awayGoals;
@@ -215,6 +215,24 @@ function fixtureTeamScore(match, side) {
     return String(row.description || "").toUpperCase() === "CURRENT";
   });
   return Number((current || candidates[0]).score.goals);
+}
+function fixtureHalfTimeScore(match, side) {
+  const directScore = side === "home" ? match.halfTimeHomeGoals : match.halfTimeAwayGoals;
+  if (directScore !== null && directScore !== undefined && Number.isFinite(Number(directScore))) {
+    return Number(directScore);
+  }
+  const participants = Array.isArray(match.participants) ? match.participants : [];
+  const team = participants.find(function (item) { return item.meta && item.meta.location === side; });
+  if (!team) return null;
+  const rows = Array.isArray(match.scores) ? match.scores : [];
+  const row = rows.find(function (item) {
+    const description = String(item.description || "").toUpperCase().replace(/[\\s-]+/g, "_");
+    return Number(item.participant_id) === Number(team.id) &&
+      ["1ST_HALF", "FIRST_HALF", "HALF_TIME", "HT"].includes(description) &&
+      item.score && item.score.goals !== null && item.score.goals !== undefined &&
+      Number.isFinite(Number(item.score.goals));
+  });
+  return row ? Number(row.score.goals) : null;
 }
 function logoMarkup(url) {
   if (!url) return '<span class="team-placeholder">⚽</span>';
@@ -367,15 +385,20 @@ function renderMatches(matches) {
       const home = teamName(match, "home");
       const away = teamName(match, "away");
       const status = matchStatus(match);
+      const htHome = fixtureHalfTimeScore(match, "home");
+      const htAway = fixtureHalfTimeScore(match, "away");
+      const halfTimeMarkup = htHome !== null && htAway !== null
+        ? '<div class="fixture-half-time">HT <strong>' + escapeHtml(htHome + " - " + htAway) + '</strong></div>' : '';
       const fixtureId = match.id || match.fixture_id || "";
       const isOpenLiga = match.fixtureSource === "OpenLigaDB";
       const supportsPredictions = match.predictionsSupported !== false && (isOpenLiga || match.fixtureSource !== "TheSportsDB");
       const supportsOdds = supportsPredictions && (isOpenLiga || /^\\d+$/.test(String(fixtureId)));
       const supportsHeadToHead = supportsPredictions && (isOpenLiga || /^\\d+$/.test(String(fixtureId)));
+      const finished = fixtureIsFinished(match);
       const actions = supportsPredictions
-        ? '<div class="prediction-actions"><button class="prediction-button predict-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">JUDY prediction</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
-          (supportsOdds ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
-          '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (fixtureIsFinished(match) ? "true" : "false") + '"><div class="prediction-label"><span>Half-time</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>1X2</span><b>Checking saved prediction…</b></div></div>'
+        ? '<div class="prediction-actions">' + (!finished ? '<button class="prediction-button predict-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">JUDY prediction</button>' + (supportsOdds ? '<button class="odds-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '">Show odds</button>' : '') : '') + (supportsHeadToHead ? '<button class="h2h-button" type="button" data-fixture-id="' + escapeHtml(fixtureId) + '" data-home-team="' + escapeHtml(home) + '" data-away-team="' + escapeHtml(away) + '">Head to head</button>' : '') + '</div>' +
+          (supportsOdds && !finished ? '<div class="odds-panel" id="odds-' + escapeHtml(fixtureId) + '" hidden></div>' : '') + (supportsHeadToHead ? '<div class="h2h-panel" id="h2h-' + escapeHtml(fixtureId) + '" hidden></div>' : '') +
+          '<div class="prediction-results" id="prediction-' + escapeHtml(fixtureId) + '" data-finished="' + (finished ? "true" : "false") + '"><div class="prediction-label"><span>Half-time</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>Full-time</span><b>Checking saved prediction…</b></div><div class="prediction-label"><span>1X2</span><b>Checking saved prediction…</b></div></div>'
         : '<div class="prediction-label"><span>Prediction</span><b>Not available for this fixture source yet.</b></div>';
       return '<article class="fixture-card flashscore-fixture">' +
         '<div class="flashscore-kickoff"><strong>' + escapeHtml(matchTime(match)) + '</strong><span>' + escapeHtml(status) + '</span></div>' +
@@ -383,6 +406,7 @@ function renderMatches(matches) {
           '<span class="flashscore-score">' + escapeHtml(fixtureTeamScore(match, "home") ?? "–") + '</span></div>' +
         '<div class="flashscore-team-row">' + logoMarkup(teamLogo(match,"away")) + '<b>' + escapeHtml(away) + '</b>' +
           '<span class="flashscore-score">' + escapeHtml(fixtureTeamScore(match, "away") ?? "–") + '</span></div>' +
+        halfTimeMarkup +
         (match.dataNote ? '<p class="fixture-data-note">' + escapeHtml(match.dataNote) + '</p>' : '') +
         actions + '</article>';
     }).join("");
