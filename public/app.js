@@ -535,11 +535,24 @@ function teamIntelligenceMarkup(data, fixture) {
   const homeName = fixture && fixture.homeTeam ? fixture.homeTeam : "Home team";
   const awayName = fixture && fixture.awayTeam ? fixture.awayTeam : "Away team";
   function teamBlock(label, team) {
-    const form = (team.lastFive || []).map(item => item.outcome).join(" · ") || "Unknown";
+    const matches = Array.isArray(team.lastFive) ? team.lastFive : [];
+    const form = matches.map(item => item.outcome).join(" · ") || "Unknown";
+    const matchRows = matches.map(item => {
+      const date = item.date ? new Date(String(item.date).replace(" ", "T") + "Z") : null;
+      const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString() : "Date unavailable";
+      const opponent = item.opponentName || "Opponent unavailable";
+      const score = item.opponentGoals == null
+        ? item.goalsFor + "–" + item.goalsAgainst
+        : item.venue === "home"
+          ? item.goalsFor + "–" + item.opponentGoals
+          : item.opponentGoals + "–" + item.goalsFor;
+      return '<li><span>' + escapeHtml(dateLabel) + '</span><b>' + escapeHtml(item.teamName || label) + ' ' + escapeHtml(score) + ' ' + escapeHtml(opponent) + '</b><em>' + escapeHtml(item.outcome) + '</em></li>';
+    }).join("");
     const venueLabel = team.venueSplit === "home" ? "Home" :
       team.venueSplit === "away" ? "Away" : "All venues";
     return '<div class="intelligence-team"><strong>' + escapeHtml(label) + '</strong>' +
-      '<span>Last ' + escapeHtml(String((team.lastFive || []).length)) + ' results: ' + escapeHtml(form) + '</span>' +
+      (matchRows ? '<ul class="recent-match-list">' + matchRows + '</ul>' : '<span>Previous match names are not available from the data provider.</span>') +
+      '<span>Recent form: ' + escapeHtml(form) + '</span>' +
       '<span>W-D-L: ' + escapeHtml(team.wins == null || team.draws == null || team.losses == null ? "Not available" : team.wins + "-" + team.draws + "-" + team.losses) +
       ' · ' + escapeHtml(venueLabel) + ' sample: ' + escapeHtml(team.venueMatches == null ? "Not available" : team.venueMatches) + '</span>' +
       '<span>Avg goals: ' + escapeHtml(team.averageGoalsFor == null ? "Not available" : team.averageGoalsFor) + ' scored / ' +
