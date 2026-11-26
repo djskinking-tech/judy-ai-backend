@@ -582,7 +582,14 @@ export default {
       run.autoPredictionPageLimitReached = autoDateResults.some(item => item.pageLimitReached);
       do {
         const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
-        for (const key of page.keys || []) {
+        // Rotate the one-fixture-per-run check so an in-progress early key cannot
+        // starve later due fixtures on every scheduled invocation.
+        const trackingKeys = (page.keys || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+        const lastCheckedKey = await env.JUDY_PREDICTIONS.get("tracking:lastCheckedKey");
+        let trackingStart = lastCheckedKey ? trackingKeys.findIndex(item => item.name > lastCheckedKey) : 0;
+        if (trackingStart < 0) trackingStart = 0;
+        const orderedTrackingKeys = trackingKeys.slice(trackingStart).concat(trackingKeys.slice(0, trackingStart));
+        for (const key of orderedTrackingKeys) {
           if (run.fixturesChecked >= 1) {
             run.limitReached = true;
             stop = true;
@@ -598,6 +605,7 @@ export default {
               const fallbackKickoffRaw = String(record.fixture && record.fixture.startingAt || "").replace(" ", "T");
               const fallbackKickoff = new Date(/[zZ]|[+-]\\d{2}:\\d{2}$/.test(fallbackKickoffRaw) ? fallbackKickoffRaw : fallbackKickoffRaw + "Z").getTime();
               if (!Number.isFinite(fallbackKickoff) || fallbackKickoff > Date.now()) continue;
+              await env.JUDY_PREDICTIONS.put("tracking:lastCheckedKey", key.name);
               const openId = String(record.fixtureId).split(":")[1];
               const openResponse = await fetch("https://api.openligadb.de/getmatchdata/" + openId, { headers: { "Accept": "application/json" } });
               if (!openResponse.ok) {
@@ -634,6 +642,7 @@ export default {
             const kickoffTime = new Date(/[zZ]|[+-]\\d{2}:\\d{2}$/.test(kickoffRaw) ? kickoffRaw : kickoffRaw + "Z").getTime();
             if (!Number.isFinite(kickoffTime) || kickoffTime > Date.now()) continue;
             run.dueFixtures++;
+            await env.JUDY_PREDICTIONS.put("tracking:lastCheckedKey", key.name);
             const fixture = await sportmonksRequest(env, "fixtures/" + record.fixtureId, {
               include: "participants;scores;state;league"
             }, { bypassCache: true });
@@ -2833,7 +2842,7 @@ export default {
         app: "JUDY AI",
         success: true,
         backendVersion: "multi-source-fixtures-v5",
-        buildMarker: "football-only-catalogue-filter-2026-11-26-01",
+        buildMarker: "preview-tracking-round-robin-2026-11-26-06",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
