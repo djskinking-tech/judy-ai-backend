@@ -63,7 +63,8 @@ async function sportmonksRequest(env, path, params = {}, options = {}) {
 
   // Historical fixture and team-history responses are effectively immutable.
   // Cache them for 30 days; keep fixture detail and date listings fresher.
-  const ttl = (path.startsWith("fixtures/between/") || path.startsWith("fixtures/head-to-head/")) ? 2592000 :
+  const ttl = path === "livescores/inplay" ? 15 :
+    (path.startsWith("fixtures/between/") || path.startsWith("fixtures/head-to-head/")) ? 2592000 :
     (/^fixtures\/\d+$/.test(path) ? 21600 : 300);
   if (!options.bypassCache) await cache.put(cacheKey, new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + ttl }
@@ -948,7 +949,7 @@ export default {
       try {
         const fixtures = await sportmonksRequest(env, "livescores/inplay", {
           include: "participants;scores;state;events"
-        }, { bypassCache: true });
+        });
         const payload = {
           app: "JUDY AI",
           success: true,
