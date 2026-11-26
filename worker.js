@@ -776,7 +776,7 @@ export default {
       return reply({
         app: "JUDY AI",
         success: true,
-        buildVersion: "preview-football-catalogue-filter-2026-11-26-01",
+        buildVersion: "preview-fixture-dedupe-verification-2026-11-26-02",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
@@ -2347,7 +2347,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v15/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v16/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
