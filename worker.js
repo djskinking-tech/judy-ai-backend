@@ -505,7 +505,7 @@ export default {
         // A six-hour retry window gives later fixtures a turn while allowing
         // history to improve before a previously ineligible match is reconsidered.
         if (!batch.attemptedAt || typeof batch.attemptedAt !== "object") batch.attemptedAt = {};
-        const retryWindowMs = 6 * 60 * 60 * 1000;
+        const retryWindowMs = 30 * 60 * 1000;
         const nowMs = Date.now();
         const pending = fixtures.filter(item => {
           const id = String(item.id);
@@ -774,6 +774,8 @@ export default {
     if (url.pathname === "/api/diagnostics") {
       return reply({
         app: "JUDY AI",
+        success: true,
+        buildVersion: "preview-repair-2026-11-26-01",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
