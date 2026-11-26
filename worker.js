@@ -776,7 +776,7 @@ export default {
       return reply({
         app: "JUDY AI",
         success: true,
-        buildVersion: "preview-fixture-dedupe-participant-fix-2026-11-26-04",
+        buildVersion: "preview-fixture-dedupe-scope-fix-2026-11-26-05",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
@@ -2347,7 +2347,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v18/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v19/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2694,6 +2694,14 @@ export default {
           const a = normaliseTeam(left);
           const b = normaliseTeam(right);
           return a === b || (Math.min(a.length, b.length) >= 7 && (a.includes(b) || b.includes(a)));
+        };
+        // This helper is local to the OpenFootball merge scope. Sportmonks
+        // fixtures expose team names through participants, not homeTeam/awayTeam.
+        const fixtureTeamForDedupe = (row, side) => {
+          if (row && row[side + "Team"]) return row[side + "Team"];
+          const participants = Array.isArray(row && row.participants) ? row.participants : [];
+          const participant = participants.find(item => item && item.meta && item.meta.location === side);
+          return participant && (participant.name || participant.short_code) || "";
         };
         const knownFixtures = new Set(matches.map(match =>
           date + "|" + normaliseTeam(fixtureTeamForDedupe(match, "home")) + "|" +
