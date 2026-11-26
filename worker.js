@@ -776,7 +776,7 @@ export default {
       return reply({
         app: "JUDY AI",
         success: true,
-        buildVersion: "preview-repair-2026-11-26-01",
+        buildVersion: "preview-football-catalogue-filter-2026-11-26-01",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
@@ -2347,7 +2347,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v14/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v15/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2469,7 +2469,7 @@ export default {
           openLigaCatalogueDiagnostics.availableCompetitionNames = availableLeagues
             .map(item => String(item && item.leagueName || "").trim())
             .filter(Boolean).slice(0, 30);
-          const wantedCompetition = /serie\s*a|ligue\s*1|eredivisie|primeira\s*liga|europa\s*league|conference\s*league|championship|scottish\s*premier|belgian\s*(pro|first)|super\s*league|2\\.?\s*bundesliga|segunda\s*division|serie\s*b|ligue\s*2/i;
+          const wantedCompetition = /serie\s*a|ligue\s*1|eredivisie|primeira\s*liga|europa\s*league|conference\s*league|(?:efl|english football league)\s+championship|scottish\s*premier|belgian\s*(pro|first)|super\s*league|2\\.?\s*bundesliga|segunda\s*division|serie\s*b|ligue\s*2/i;
           openLigaCatalogueDiagnostics.selectedCompetitions = leagues.map(item => ({ shortcut: item.shortcut, name: item.name }));
         const existingShortcuts = new Set(leagues.map(item => item.shortcut.toLowerCase()));
           for (const item of availableLeagues) {
@@ -2805,7 +2805,7 @@ export default {
         app: "JUDY AI",
         success: true,
         backendVersion: "multi-source-fixtures-v5",
-        buildMarker: "historical-results-home-away-scores-2026-11-25",
+        buildMarker: "football-only-catalogue-filter-2026-11-26-01",
         provider: fixtureSource,
         date,
         timezone: "Africa/Nairobi",
