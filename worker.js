@@ -347,6 +347,7 @@ export default {
       // Alternate today's and tomorrow's preparation across half-hour runs to keep
       // each scheduled invocation comfortably below Cloudflare's subrequest ceiling.
       const scheduledDateOffset = new Date().getUTCMinutes() < 30 ? 0 : 1;
+      if (scheduledDateOffset === 0) {
       for (const dayOffset of [scheduledDateOffset]) {
         const targetDate = nairobiDateOffset(dayOffset);
         const batchKey = "autopregen:" + targetDate;
@@ -464,6 +465,7 @@ export default {
         });
         if (run.rateLimited) break;
       }
+      }
       // Prepare supported OpenLigaDB fallback fixtures automatically as well.
       // OpenFootball/TheSportsDB fixtures are deliberately excluded because the
       // prediction endpoint does not yet have verified fixture-to-history mapping.
@@ -471,6 +473,7 @@ export default {
       run.openLigaAutoPredictionInsufficientHistory = 0;
       run.openLigaAutoPredictionFailed = 0;
       run.openLigaAutoPredictionByDate = [];
+      if (scheduledDateOffset === 1) {
       for (const dayOffset of [scheduledDateOffset]) {
         const targetDate = nairobiDateOffset(dayOffset);
         const batchKey = "autopregen-openliga:" + targetDate;
@@ -510,7 +513,7 @@ export default {
           const lastAttempt = Date.parse(batch.attemptedAt[id] || "");
           return !Number.isFinite(lastAttempt) || nowMs - lastAttempt >= retryWindowMs;
         });
-        const selected = pending.slice(0, 3);
+        const selected = pending.slice(0, 1);
         let generated = 0;
         let insufficient = 0;
         let failed = 0;
@@ -567,6 +570,7 @@ export default {
         });
         if (run.rateLimited) break;
       }
+      }
       run.autoPredictionByDate = autoDateResults;
       run.autoPredictionDate = autoDateResults.length ? autoDateResults[autoDateResults.length - 1].date : null;
       run.autoPredictionFixturesFound = autoDateResults.reduce((sum, item) => sum + item.fixturesFound, 0);
@@ -578,7 +582,7 @@ export default {
       do {
         const page = await env.JUDY_PREDICTIONS.list({ prefix: "prediction:", limit: 100, cursor });
         for (const key of page.keys || []) {
-          if (run.fixturesChecked >= 5) {
+          if (run.fixturesChecked >= 1) {
             run.limitReached = true;
             stop = true;
             break;
