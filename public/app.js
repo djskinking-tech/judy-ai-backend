@@ -818,3 +818,29 @@ fixturesBox.addEventListener("click", function (event) {
     return;
   }
 });
+
+
+// Simple five-section navigation. Existing match, prediction and tracking logic stays unchanged.
+document.querySelectorAll(".section-nav a").forEach(function (link) {
+  link.addEventListener("click", function () {
+    document.querySelectorAll(".section-nav a").forEach(function (item) {
+      item.removeAttribute("aria-current");
+    });
+    link.setAttribute("aria-current", "page");
+  });
+});
+const navSettingsButton = document.querySelector("[data-nav-settings]");
+if (navSettingsButton) {
+  navSettingsButton.addEventListener("click", function () {
+    toggleSettings(true);
+    navSettingsButton.setAttribute("aria-expanded", "true");
+    document.querySelectorAll(".section-nav a").forEach(function (item) {
+      item.removeAttribute("aria-current");
+    });
+  });
+}
+if (settingsClose) {
+  settingsClose.addEventListener("click", function () {
+    if (navSettingsButton) navSettingsButton.setAttribute("aria-expanded", "false");
+  });
+}
