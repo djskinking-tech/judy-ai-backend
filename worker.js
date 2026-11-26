@@ -2633,7 +2633,7 @@ export default {
         }
         const normaliseFixtureTeam = value => String(value || "")
           .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase().replace(/\\b(fc|cf|afc|sc|ac)\\b/g, "")
+          .toLowerCase().replace(/\b(fc|cf|afc|sc|ac)\b/g, "")
           .replace(/[^a-z0-9]/g, "");
         const fixtureTeamForDedupe = (row, side) => {
           if (row && row[side + "Team"]) return row[side + "Team"];
@@ -2641,15 +2641,25 @@ export default {
           const participant = participants.find(item => item && item.meta && item.meta.location === side);
           return participant && (participant.name || participant.short_code) || "";
         };
+        const teamNamesMatch = (left, right) => {
+          const a = normaliseFixtureTeam(left);
+          const b = normaliseFixtureTeam(right);
+          return a === b || (Math.min(a.length, b.length) >= 7 && (a.startsWith(b) || b.startsWith(a)));
+        };
         const knownFixtureKeys = new Set(matches.map(row =>
           date + "|" + normaliseFixtureTeam(fixtureTeamForDedupe(row, "home")) + "|" +
           normaliseFixtureTeam(fixtureTeamForDedupe(row, "away"))
         ));
         const uniqueOpenLiga = new Map(openLigaRows.map(row => [row.id, row]));
         for (const row of uniqueOpenLiga.values()) {
-          const key = date + "|" + normaliseFixtureTeam(row.homeTeam) + "|" + normaliseFixtureTeam(row.awayTeam);
-          if (knownFixtureKeys.has(key)) continue;
-          knownFixtureKeys.add(key);
+          const homeKey = normaliseFixtureTeam(row.homeTeam);
+          const awayKey = normaliseFixtureTeam(row.awayTeam);
+          const duplicate = [...knownFixtureKeys].some(existing => {
+            const [existingDate, existingHome, existingAway] = existing.split("|");
+            return existingDate === date && teamNamesMatch(homeKey, existingHome) && teamNamesMatch(awayKey, existingAway);
+          });
+          if (duplicate) continue;
+          knownFixtureKeys.add(date + "|" + homeKey + "|" + awayKey);
           matches.push(row);
         }
         if (uniqueOpenLiga.size) {
@@ -2680,6 +2690,11 @@ export default {
           .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
           .toLowerCase().replace(/\b(fc|cf|afc|sc|ac)\b/g, "")
           .replace(/[^a-z0-9]/g, "");
+        const teamNamesMatch = (left, right) => {
+          const a = normaliseTeam(left);
+          const b = normaliseTeam(right);
+          return a === b || (Math.min(a.length, b.length) >= 7 && (a.startsWith(b) || b.startsWith(a)));
+        };
         const knownFixtures = new Set(matches.map(match =>
           date + "|" + normaliseTeam(match.homeTeam) + "|" + normaliseTeam(match.awayTeam)
         ));
@@ -2713,8 +2728,12 @@ export default {
               dateMatches++;
               const homeKey = normaliseTeam(row.team1);
               const awayKey = normaliseTeam(row.team2);
+              const duplicate = [...knownFixtures].some(existing => {
+                const [existingDate, existingHome, existingAway] = existing.split("|");
+                return existingDate === date && teamNamesMatch(homeKey, existingHome) && teamNamesMatch(awayKey, existingAway);
+              });
+              if (duplicate) continue;
               const dedupeKey = date + "|" + homeKey + "|" + awayKey;
-              if (knownFixtures.has(dedupeKey)) continue;
               knownFixtures.add(dedupeKey);
               const hasFullTimeScore = Boolean(row.score && Array.isArray(row.score.ft));
               const timeText = row.time
