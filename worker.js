@@ -2591,7 +2591,9 @@ export default {
                 awayGoals: !correction && finished && validScore(fullTimeResult) ? Number(fullTimeResult.pointsTeam2) : null,
                 halfTimeHomeGoals: !correction && finished && validScore(halfTimeResult) ? Number(halfTimeResult.pointsTeam1) : null,
                 halfTimeAwayGoals: !correction && finished && validScore(halfTimeResult) ? Number(halfTimeResult.pointsTeam2) : null,
-                dataNote: correction ? "Opponent corrected against official UEFA fixture list; prediction disabled because the provider's fixture ID maps to different teams." : null,
+                dataNote: correction ? "Opponent corrected against official UEFA fixture list; prediction disabled because the provider's fixture ID maps to different teams." :
+                  (finished && !validScore(fullTimeResult) ? "The provider marks this match as finished, but no verified full-time score is available. JUDY will not assume 0–0." :
+                  (finished && !validScore(halfTimeResult) ? "The full-time result is available, but the provider has not supplied a verified half-time score." : null)),
                 league: { name: row.leagueName || league.name },
                 country: league.country,
                 status: finished ? "Finished" : "Scheduled"
