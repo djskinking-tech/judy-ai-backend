@@ -2014,6 +2014,8 @@ export default {
           source: "Sportmonks fixture sidelined and lineup data",
           note: "Only provider-listed unavailable players and lineup entries are shown. Unknown status is not treated as fit or injured."
         };
+        const firstHalfHomeCount = homeForm.filter(item => item.ht).length;
+        const firstHalfAwayCount = awayForm.filter(item => item.ht).length;
         const confidence = Math.min(homeForm.length, awayForm.length) >= 6 ? "Moderate" : "Low";
         const result = {
           app: "JUDY AI",
