@@ -115,7 +115,9 @@ footer{display:flex;justify-content:space-between;border-top:1px solid #1d2e41;p
 /* Clear, mobile-first section navigation and page structure */
 .section-nav{position:sticky;top:0;z-index:20;display:flex;gap:8px;align-items:center;padding:12px 0;margin:0 0 20px;background:rgba(8,17,31,.94);backdrop-filter:blur(14px);border-bottom:1px solid rgba(143,162,184,.14)}
 .section-nav a{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:999px;color:#c9d6e3;text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap;transition:background .2s,border-color .2s}
-.section-nav a:first-child{border-color:#456b50;color:var(--green);background:#13271f}
+.section-nav a[aria-current="page"],.section-nav button[aria-expanded="true"]{border-color:#456b50;color:var(--green);background:#13271f}
+.section-nav button{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:999px;color:#c9d6e3;background:transparent;font:inherit;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
+.section-nav button:hover{border-color:var(--green);background:#14271f;color:var(--green)}
 .section-nav a:hover{border-color:var(--green);background:#14271f;color:var(--green)}
 .fixtures-section{padding:22px;border:1px solid rgba(143,162,184,.16);border-radius:20px;background:rgba(12,25,40,.56)}
 .fixtures-section .section-heading{margin-bottom:4px}
@@ -240,3 +242,8 @@ body.compact-fixtures .fixture-teams{margin:12px 0}
 @media(min-width:760px){.league-fixture-list{grid-template-columns:repeat(2,minmax(0,1fr))}.flashscore-fixture:nth-child(odd){border-right:1px solid #22364a}}
 @media(max-width:680px){.flashscore-fixture{padding:12px 11px}.flashscore-team-row b{font-size:12px}}
 .fixture-half-time{margin:5px 0 0 40px;color:var(--muted);font-size:10px;letter-spacing:.2px}.fixture-half-time strong{color:var(--cyan);font-variant-numeric:tabular-nums}
+
+@media(max-width:680px){
+  .section-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;padding:9px 0;overflow:visible}
+  .section-nav a,.section-nav button{padding:9px 3px;font-size:9px;text-align:center;min-width:0}
+}
