@@ -776,7 +776,7 @@ export default {
       return reply({
         app: "JUDY AI",
         success: true,
-        buildVersion: "preview-fixture-dedupe-verification-2026-11-26-02",
+        buildVersion: "preview-fixture-dedupe-containment-2026-11-26-03",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
@@ -2347,7 +2347,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v16/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v17/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2644,7 +2644,7 @@ export default {
         const teamNamesMatch = (left, right) => {
           const a = normaliseFixtureTeam(left);
           const b = normaliseFixtureTeam(right);
-          return a === b || (Math.min(a.length, b.length) >= 7 && (a.startsWith(b) || b.startsWith(a)));
+          return a === b || (Math.min(a.length, b.length) >= 7 && (a.includes(b) || b.includes(a)));
         };
         const knownFixtureKeys = new Set(matches.map(row =>
           date + "|" + normaliseFixtureTeam(fixtureTeamForDedupe(row, "home")) + "|" +
@@ -2693,7 +2693,7 @@ export default {
         const teamNamesMatch = (left, right) => {
           const a = normaliseTeam(left);
           const b = normaliseTeam(right);
-          return a === b || (Math.min(a.length, b.length) >= 7 && (a.startsWith(b) || b.startsWith(a)));
+          return a === b || (Math.min(a.length, b.length) >= 7 && (a.includes(b) || b.includes(a)));
         };
         const knownFixtures = new Set(matches.map(match =>
           date + "|" + normaliseTeam(match.homeTeam) + "|" + normaliseTeam(match.awayTeam)
