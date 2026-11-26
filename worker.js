@@ -776,7 +776,7 @@ export default {
       return reply({
         app: "JUDY AI",
         success: true,
-        buildVersion: "preview-fixture-dedupe-containment-2026-11-26-03",
+        buildVersion: "preview-fixture-dedupe-participant-fix-2026-11-26-04",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
@@ -2347,7 +2347,7 @@ export default {
 
     const cache = caches.default;
     // v11 invalidates cached API responses and exposes a distinct build marker.
-    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v17/" + date);
+    const cacheKey = new Request("https://judy-ai-cache.example/sportmonks/matches/v18/" + date);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return new Response(cached.body, {
@@ -2696,7 +2696,8 @@ export default {
           return a === b || (Math.min(a.length, b.length) >= 7 && (a.includes(b) || b.includes(a)));
         };
         const knownFixtures = new Set(matches.map(match =>
-          date + "|" + normaliseTeam(match.homeTeam) + "|" + normaliseTeam(match.awayTeam)
+          date + "|" + normaliseTeam(fixtureTeamForDedupe(match, "home")) + "|" +
+          normaliseTeam(fixtureTeamForDedupe(match, "away"))
         ));
         for (const competition of competitions) {
           try {
