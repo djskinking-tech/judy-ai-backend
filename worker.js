@@ -1,4 +1,7 @@
 const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
+function scheduledWorkerOrigin(env) {
+  return env.JUDY_WORKER_ORIGIN || WEBSITE_ORIGIN;
+}
 const CACHE_TTL = 900;
 
 function verifiedOpenLigaCorrection(date, homeTeam) {
@@ -402,7 +405,7 @@ export default {
           let retryCurrent = false;
           try {
             const response = await this.fetch(new Request(
-              WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
+              scheduledWorkerOrigin(env) + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
               { method: "GET" }
             ), env, ctx);
             const result = await response.json();
@@ -477,7 +480,7 @@ export default {
         let fixtures = [];
         try {
           const matchesResponse = await this.fetch(new Request(
-            WEBSITE_ORIGIN + "/api/matches?date=" + encodeURIComponent(targetDate),
+            scheduledWorkerOrigin(env) + "/api/matches?date=" + encodeURIComponent(targetDate),
             { method: "GET" }
           ), env, ctx);
           const matchesResult = await matchesResponse.json();
@@ -515,7 +518,7 @@ export default {
           const fixtureId = String(fixture.id);
           try {
             const response = await this.fetch(new Request(
-              WEBSITE_ORIGIN + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
+              scheduledWorkerOrigin(env) + "/api/predictions?fixtureId=" + encodeURIComponent(fixtureId),
               { method: "GET" }
             ), env, ctx);
             const result = await response.json();
