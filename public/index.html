@@ -24,9 +24,11 @@
     </header>
 
     <nav class="section-nav" aria-label="Main sections">
-      <a href="#live-center">Live scores</a>
-      <a href="#fixtures-center">Fixtures</a>
-      <a href="#performance-dashboard">Predictions & results</a>
+      <a href="#home-center" aria-current="page">Home</a>
+      <a href="#fixtures-center">Predictions</a>
+      <a href="#fixtures">Match details</a>
+      <a href="#performance-dashboard">Performance</a>
+      <button type="button" data-nav-settings aria-controls="settings-panel" aria-expanded="false">Settings</button>
     </nav>
 
     <section id="settings-panel" class="settings-panel" aria-label="JUDY AI preferences" hidden>
@@ -43,7 +45,7 @@
     </section>
 
     <main>
-      <section class="hero">
+      <section id="home-center" class="hero">
         <div class="hero-copy">
           <p class="eyebrow">SEE THE GAME BEFORE KICK-OFF</p>
           <h1>Football intelligence.<br><span>One step ahead.</span></h1>
