@@ -1,4 +1,4 @@
-const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking.workers.dev";
+const WEBSITE_ORIGIN = "https://judy-ai-backend-live.djskinking-tech.workers.dev";
 function scheduledWorkerOrigin(env) {
   return env.JUDY_WORKER_ORIGIN || WEBSITE_ORIGIN;
 }
