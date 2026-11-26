@@ -1102,6 +1102,8 @@ export default {
       const beforeParam = url.searchParams.get("before") || dateParam;
       const lookbackDays = Math.max(1, Math.min(100, Number(url.searchParams.get("lookbackDays") || 30)));
       const limit = Math.max(1, Math.min(5, Number(url.searchParams.get("limit") || 5)));
+      const excludedFixtureIds = new Set((url.searchParams.get("excludeFixtureIds") || "")
+        .split(",").map(value => value.trim()).filter(value => /^[0-9]+$/.test(value)));
       if (rawIds.length && (dateParam || autoMode || url.searchParams.has("before") || rawIds.length > 5 || rawIds.some(id => !/^[0-9]+$/.test(id)))) {
         return reply({ error: "Use either fixtureIds, date, or auto historical search—not more than one mode." }, 400);
       }
@@ -1203,6 +1205,7 @@ export default {
           } while (Array.isArray(rangePageRows) && rangePageRows.length === 50 && rangePage <= maxRangePages);
           const uniqueRangeFixtures = [...new Map(rangeFixtures.filter(f => f && f.id).map(f => [String(f.id), f])).values()];
           const finished = uniqueRangeFixtures.filter(f => {
+            if (excludedFixtureIds.has(String(f.id))) return false;
             const stateName = f.state && String(f.state.name || "").toLowerCase();
             const kickoffTime = new Date(String(f.starting_at || "").replace(" ", "T") + "Z").getTime();
             const hasFullTimeScore = Array.isArray(f.scores) && f.scores.some(score =>
@@ -1227,7 +1230,8 @@ export default {
             pagesFetched: Math.min(rangePage - 1, maxRangePages),
             pageLimitReached: rangePage > maxRangePages && Array.isArray(rangePageRows) && rangePageRows.length === 50,
             selectedFixtures: rawIds.length,
-            note: "Searches up to 5 Sportmonks date-range pages (250 fixtures maximum), then backtests the most recent eligible completed fixtures."
+            excludedFixtureIdsApplied: excludedFixtureIds.size,
+            note: "Searches up to 5 Sportmonks date-range pages (250 fixtures maximum), excludes previously tested fixture IDs when supplied, then backtests the most recent eligible completed fixtures."
           };
         } else if (!rawIds.length) {
           const dayFixtures = await sportmonks("fixtures/date/" + dateParam, {
