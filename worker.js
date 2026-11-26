@@ -785,7 +785,7 @@ export default {
       return reply({
         app: "JUDY AI",
         success: true,
-        buildVersion: "preview-fixture-dedupe-scope-fix-2026-11-26-05",
+        buildVersion: "preview-tracking-round-robin-2026-11-26-06",
         sportmonksTokenConfigured: Boolean(env.SPORTMONKS_API_TOKEN),
         predictionStorageConfigured: Boolean(env.JUDY_PREDICTIONS),
         availableBindingNames: Object.keys(env)
