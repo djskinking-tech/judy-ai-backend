@@ -4,6 +4,9 @@
   "main": "worker.js",
   "workers_dev": true,
   "compatibility_date": "2026-11-23",
+  "vars": {
+    "JUDY_WORKER_ORIGIN": "https://judy-ai-v22-preview.djskinking-tech.workers.dev"
+  },
   "triggers": {
     "crons": ["*/30 * * * *"]
   },
